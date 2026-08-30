@@ -1,0 +1,196 @@
+// !$*UTF8*$!
+{
+    archiveVersion = 1;
+    classes = {};
+    objectVersion = 56;
+    objects = {
+
+/* Begin PBXBuildFile section */
+        B1 = {isa = PBXBuildFile; fileRef = F1; };
+        B2 = {isa = PBXBuildFile; fileRef = F2; };
+        B3 = {isa = PBXBuildFile; fileRef = F3; };
+        B4 = {isa = PBXBuildFile; fileRef = F4; };
+        B5 = {isa = PBXBuildFile; fileRef = F5; };
+        B6 = {isa = PBXBuildFile; fileRef = F6; };
+        B7 = {isa = PBXBuildFile; fileRef = F7; };
+        B8 = {isa = PBXBuildFile; fileRef = F8; };
+        B9 = {isa = PBXBuildFile; fileRef = F9; };
+        BF1 = {isa = PBXBuildFile; fileRef = FF1; };
+        BA1 = {isa = PBXBuildFile; fileRef = FA1; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+        F1 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Climb3DApp.swift; sourceTree = "<group>"; };
+        F2 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+        F3 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Climb3DView.swift; sourceTree = "<group>"; };
+        F4 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Climb3DModel.swift; sourceTree = "<group>"; };
+        F5 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Climb3DRoute.swift; sourceTree = "<group>"; };
+        F6 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Climb3DMesh.swift; sourceTree = "<group>"; };
+        F7 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Climb3DMeshBuilder.swift; sourceTree = "<group>"; };
+        F8 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Climb3DSceneController.swift; sourceTree = "<group>"; };
+        F9 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STLWriter.swift; sourceTree = "<group>"; };
+        F10 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareSheet.swift; sourceTree = "<group>"; };
+        F11 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+        FA1 = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+        PRODUCT = {isa = PBXFileReference; explicitFileType = wrapper.application; path = Climb3D.app; sourceTree = BUILT_PRODUCTS_DIR; };
+        FF1 = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SceneKit.framework; path = System/Library/Frameworks/SceneKit.framework; sourceTree = SDKROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+        FRAMEWORKS = {
+            isa = PBXFrameworksBuildPhase;
+            buildActionMask = 2147483647;
+            files = (BF1,);
+            runOnlyForDeploymentPostprocessing = 0;
+        };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+        ROOT = {
+            isa = PBXGroup;
+            children = (APPGROUP, FRAMEWORKGROUP, PRODUCTSGROUP,);
+            sourceTree = "<group>";
+        };
+        APPGROUP = {
+            isa = PBXGroup;
+            path = Climb3D;
+            sourceTree = "<group>";
+            children = (F1,F2,F3,F4,F5,F6,F7,F8,F9,F10,F11,FA1,);
+        };
+        FRAMEWORKGROUP = {
+            isa = PBXGroup;
+            name = Frameworks;
+            sourceTree = "<group>";
+            children = (FF1,);
+        };
+        PRODUCTSGROUP = {
+            isa = PBXGroup;
+            name = Products;
+            sourceTree = "<group>";
+            children = (PRODUCT,);
+        };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+        TARGET = {
+            isa = PBXNativeTarget;
+            buildConfigurationList = TARGETCONFIGLIST;
+            buildPhases = (SOURCES,FRAMEWORKS,RESOURCES,);
+            buildRules = ();
+            dependencies = ();
+            name = Climb3D;
+            productName = Climb3D;
+            productReference = PRODUCT;
+            productType = "com.apple.product-type.application";
+        };
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+        PROJECT = {
+            isa = PBXProject;
+            attributes = {
+                LastSwiftUpdateCheck = 2600;
+                LastUpgradeCheck = 2600;
+            };
+            buildConfigurationList = PROJECTCONFIGLIST;
+            compatibilityVersion = "Xcode 14.0";
+            developmentRegion = en;
+            hasScannedForEncodings = 0;
+            knownRegions = (en,Base,);
+            mainGroup = ROOT;
+            productRefGroup = PRODUCTSGROUP;
+            projectDirPath = "";
+            projectRoot = "";
+            targets = (TARGET,);
+        };
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+        RESOURCES = {
+            isa = PBXResourcesBuildPhase;
+            buildActionMask = 2147483647;
+            files = (BA1,);
+            runOnlyForDeploymentPostprocessing = 0;
+        };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+        SOURCES = {
+            isa = PBXSourcesBuildPhase;
+            buildActionMask = 2147483647;
+            files = (B1,B2,B3,B4,B5,B6,B7,B8,B9,);
+            runOnlyForDeploymentPostprocessing = 0;
+        };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+        PDEBUG = {
+            isa = XCBuildConfiguration;
+            buildSettings = {SWIFT_VERSION = 5.0;};
+            name = Debug;
+        };
+        PRELEASE = {
+            isa = XCBuildConfiguration;
+            buildSettings = {SWIFT_VERSION = 5.0;};
+            name = Release;
+        };
+        TDEBUG = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+                CODE_SIGN_STYLE = Automatic;
+                CURRENT_PROJECT_VERSION = 1;
+                DEVELOPMENT_TEAM = K2FS6TGPBV;
+                GENERATE_INFOPLIST_FILE = NO;
+                INFOPLIST_FILE = Climb3D/Info.plist;
+                IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+                MARKETING_VERSION = 0.1;
+                PRODUCT_BUNDLE_IDENTIFIER = com.alessiosargentini.climb3d;
+                PRODUCT_NAME = Climb3D;
+                SDKROOT = iphoneos;
+                SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+                SWIFT_VERSION = 5.0;
+                TARGETED_DEVICE_FAMILY = "1,2";
+            };
+            name = Debug;
+        };
+        TRELEASE = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+                CODE_SIGN_STYLE = Automatic;
+                CURRENT_PROJECT_VERSION = 1;
+                DEVELOPMENT_TEAM = K2FS6TGPBV;
+                GENERATE_INFOPLIST_FILE = NO;
+                INFOPLIST_FILE = Climb3D/Info.plist;
+                IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+                MARKETING_VERSION = 0.1;
+                PRODUCT_BUNDLE_IDENTIFIER = com.alessiosargentini.climb3d;
+                PRODUCT_NAME = Climb3D;
+                SDKROOT = iphoneos;
+                SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+                SWIFT_VERSION = 5.0;
+                TARGETED_DEVICE_FAMILY = "1,2";
+            };
+            name = Release;
+        };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+        PROJECTCONFIGLIST = {
+            isa = XCConfigurationList;
+            buildConfigurations = (PDEBUG,PRELEASE,);
+            defaultConfigurationIsVisible = 0;
+            defaultConfigurationName = Release;
+        };
+        TARGETCONFIGLIST = {
+            isa = XCConfigurationList;
+            buildConfigurations = (TDEBUG,TRELEASE,);
+            defaultConfigurationIsVisible = 0;
+            defaultConfigurationName = Release;
+        };
+/* End XCConfigurationList section */
+
+    };
+    rootObject = PROJECT;
+}
