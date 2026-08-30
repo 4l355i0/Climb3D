@@ -11,6 +11,7 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 12) {
+
                 HStack(spacing: 8) {
                     Circle()
                         .fill(model.hasMesh ? .green : .orange)
@@ -40,13 +41,22 @@ struct ContentView: View {
                     progress: model.progress
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipShape(RoundedRectangle(cornerRadius: 18))
+                .clipShape(
+                    RoundedRectangle(
+                        cornerRadius: 18
+                    )
+                )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18)
-                        .stroke(.secondary.opacity(0.18))
+                    RoundedRectangle(
+                        cornerRadius: 18
+                    )
+                    .stroke(
+                        .secondary.opacity(0.18)
+                    )
                 )
 
-                VStack(spacing: 6) {
+                VStack(spacing: 10) {
+
                     HStack {
                         Text("Progress")
                             .font(.caption.bold())
@@ -54,23 +64,75 @@ struct ContentView: View {
 
                         Spacer()
 
-                        Text("\(Int((model.progress * 100).rounded()))%")
-                            .font(.headline.monospacedDigit())
+                        Text(
+                            "\(Int((model.progress * 100).rounded()))%"
+                        )
+                        .font(
+                            .headline.monospacedDigit()
+                        )
                     }
 
-                    Slider(value: $model.progress, in: 0...1)
-                        .disabled(!model.hasMesh)
+                    Slider(
+                        value: $model.progress,
+                        in: 0...1
+                    )
+                    .disabled(!model.hasMesh)
+
+                    if model.hasGPX {
+
+                        HStack(spacing: 8) {
+
+                            metricView(
+                                value: String(
+                                    format: "%.1f km",
+                                    model.currentDistanceM / 1000
+                                ),
+                                label: "Ridden"
+                            )
+
+                            metricView(
+                                value: String(
+                                    format: "%.1f km",
+                                    model.remainingDistanceM / 1000
+                                ),
+                                label: "Remaining"
+                            )
+
+                            metricView(
+                                value: String(
+                                    format: "%.0f m",
+                                    model.currentElevationM
+                                ),
+                                label: "Elevation"
+                            )
+
+                            metricView(
+                                value: String(
+                                    format: "%.1f%%",
+                                    model.currentGradePercent
+                                ),
+                                label: "Grade"
+                            )
+                        }
+                    }
                 }
                 .padding(12)
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .background(
+                    .thinMaterial,
+                    in: RoundedRectangle(
+                        cornerRadius: 16
+                    )
+                )
 
                 HStack(spacing: 10) {
+
                     Button {
                         showGPXImporter = true
                     } label: {
                         Label(
                             "Load GPX",
-                            systemImage: "point.topleft.down.to.point.bottomright.curvepath"
+                            systemImage:
+                                "point.topleft.down.to.point.bottomright.curvepath"
                         )
                         .frame(maxWidth: .infinity)
                     }
@@ -78,15 +140,19 @@ struct ContentView: View {
 
                     Button {
                         do {
-                            exportedURL = try model.exportSTL()
+                            exportedURL =
+                                try model.exportSTL()
+
                             showShare = true
                         } catch {
-                            model.status = "STL export error: \(error.localizedDescription)"
+                            model.status =
+                                "STL export error: \(error.localizedDescription)"
                         }
                     } label: {
                         Label(
                             "Export STL",
-                            systemImage: "square.and.arrow.up"
+                            systemImage:
+                                "square.and.arrow.up"
                         )
                         .frame(maxWidth: .infinity)
                     }
@@ -97,8 +163,11 @@ struct ContentView: View {
                 Button {
                     model.resetCamera()
                 } label: {
-                    Label("Reset 3D view", systemImage: "view.3d")
-                        .frame(maxWidth: .infinity)
+                    Label(
+                        "Reset 3D view",
+                        systemImage: "view.3d"
+                    )
+                    .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
                 .disabled(!model.hasMesh)
@@ -107,37 +176,78 @@ struct ContentView: View {
             .navigationTitle("Climb3D")
             .navigationBarTitleDisplayMode(.inline)
         }
+
         .fileImporter(
             isPresented: $showGPXImporter,
             allowedContentTypes: [
-                UTType(filenameExtension: "gpx") ?? .xml
+                UTType(
+                    filenameExtension: "gpx"
+                ) ?? .xml
             ],
             allowsMultipleSelection: false
         ) { result in
-            guard case .success(let urls) = result,
-                  let url = urls.first else { return }
+
+            guard
+                case .success(let urls) = result,
+                let url = urls.first
+            else {
+                return
+            }
 
             do {
-                try model.loadGPXAndBuild3D(url: url)
+                try model.loadGPXAndBuild3D(
+                    url: url
+                )
             } catch {
-                model.status = "GPX error: \(error.localizedDescription)"
+                model.status =
+                    "GPX error: \(error.localizedDescription)"
             }
         }
-        .sheet(isPresented: $showShare) {
+
+        .sheet(
+            isPresented: $showShare
+        ) {
             if let exportedURL {
-                ShareSheet(items: [exportedURL])
+                ShareSheet(
+                    items: [
+                        exportedURL
+                    ]
+                )
             }
         }
+    }
+
+    private func metricView(
+        value: String,
+        label: String
+    ) -> some View {
+
+        VStack(spacing: 2) {
+            Text(value)
+                .font(
+                    .caption.bold().monospacedDigit()
+                )
+
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 
 
 // MARK: - iOS Share Sheet
 
-struct ShareSheet: UIViewControllerRepresentable {
+struct ShareSheet:
+    UIViewControllerRepresentable {
+
     let items: [Any]
 
-    func makeUIViewController(context: Context) -> UIActivityViewController {
+    func makeUIViewController(
+        context: Context
+    ) -> UIActivityViewController {
+
         UIActivityViewController(
             activityItems: items,
             applicationActivities: nil
@@ -145,9 +255,9 @@ struct ShareSheet: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(
-        _ uiViewController: UIActivityViewController,
+        _ uiViewController:
+            UIActivityViewController,
         context: Context
     ) {
-        // No update required
     }
 }
