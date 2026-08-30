@@ -14,8 +14,28 @@ final class Climb3DModel: ObservableObject {
 
     let sceneController = Climb3DSceneController()
 
-    private var route: Climb3DRoute?
+    private(set) var route: Climb3DRoute?
     private var mesh: Climb3DMesh?
+
+    var currentDistanceM: Double {
+        guard let route else { return 0 }
+        return route.distance(at: progress)
+    }
+
+    var remainingDistanceM: Double {
+        guard let route else { return 0 }
+        return route.remainingDistance(at: progress)
+    }
+
+    var currentElevationM: Double {
+        guard let route else { return 0 }
+        return route.elevation(at: progress)
+    }
+
+    var currentGradePercent: Double {
+        guard let route else { return 0 }
+        return route.gradePercent(at: progress)
+    }
 
     func loadGPXAndBuild3D(url: URL) throws {
         let access = url.startAccessingSecurityScopedResource()
