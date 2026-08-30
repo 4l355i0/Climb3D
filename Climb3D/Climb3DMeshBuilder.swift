@@ -4,7 +4,7 @@ struct Climb3DMeshBuilder {
 
     // Width of the rendered road in metres.
     // Kept deliberately wider than a real road so it stays visible on iPhone.
-    let roadHalfWidthM: Double = 6.0
+    let roadHalfWidthM: Double = 15.0
 
     // Much more conservative than the old 2.2.
     // 1.0 = geometrically correct elevation.
