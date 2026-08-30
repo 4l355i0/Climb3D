@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import UIKit
 
 struct ContentView: View {
     @EnvironmentObject private var model: Climb3DModel
@@ -67,8 +68,11 @@ struct ContentView: View {
                     Button {
                         showGPXImporter = true
                     } label: {
-                        Label("Load GPX", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
-                            .frame(maxWidth: .infinity)
+                        Label(
+                            "Load GPX",
+                            systemImage: "point.topleft.down.to.point.bottomright.curvepath"
+                        )
+                        .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
 
@@ -80,8 +84,11 @@ struct ContentView: View {
                             model.status = "STL export error: \(error.localizedDescription)"
                         }
                     } label: {
-                        Label("Export STL", systemImage: "square.and.arrow.up")
-                            .frame(maxWidth: .infinity)
+                        Label(
+                            "Export STL",
+                            systemImage: "square.and.arrow.up"
+                        )
+                        .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
                     .disabled(!model.hasMesh)
@@ -121,5 +128,26 @@ struct ContentView: View {
                 ShareSheet(items: [exportedURL])
             }
         }
+    }
+}
+
+
+// MARK: - iOS Share Sheet
+
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(
+            activityItems: items,
+            applicationActivities: nil
+        )
+    }
+
+    func updateUIViewController(
+        _ uiViewController: UIActivityViewController,
+        context: Context
+    ) {
+        // No update required
     }
 }
