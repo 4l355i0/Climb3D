@@ -4,6 +4,7 @@ import UIKit
 
 @MainActor
 final class Climb3DSceneController {
+
     let scene = SCNScene()
 
     private weak var view: SCNView?
@@ -17,69 +18,101 @@ final class Climb3DSceneController {
     private let ambientNode = SCNNode()
 
     private var mesh: Climb3DMesh?
+    private var route: Climb3DRoute?
 
     init() {
 
-        // Larger position marker
+        // Large, clearly visible rider/position marker
         let markerGeometry = SCNSphere(radius: 6.0)
 
         markerGeometry.firstMaterial?.diffuse.contents =
             UIColor.systemRed
 
         markerGeometry.firstMaterial?.emission.contents =
-            UIColor.systemRed.withAlphaComponent(0.35)
+            UIColor.systemRed.withAlphaComponent(0.40)
 
-        markerGeometry.firstMaterial?.lightingModel = .physicallyBased
+        markerGeometry.firstMaterial?.lightingModel =
+            .physicallyBased
 
-        markerNode = SCNNode(geometry: markerGeometry)
+        markerNode = SCNNode(
+            geometry: markerGeometry
+        )
+
         markerNode.isHidden = true
 
         scene.rootNode.addChildNode(meshNode)
         scene.rootNode.addChildNode(routeNode)
         scene.rootNode.addChildNode(markerNode)
 
-        // Camera
+        // MARK: Camera
+
         let camera = SCNCamera()
+
         camera.fieldOfView = 42
         camera.zNear = 0.1
         camera.zFar = 1_000_000
 
         cameraNode.camera = camera
-        scene.rootNode.addChildNode(cameraNode)
 
-        // Main light
+        scene.rootNode.addChildNode(
+            cameraNode
+        )
+
+        // MARK: Main light
+
         keyLightNode.light = SCNLight()
         keyLightNode.light?.type = .omni
         keyLightNode.light?.intensity = 1400
-        scene.rootNode.addChildNode(keyLightNode)
 
-        // Ambient light
+        scene.rootNode.addChildNode(
+            keyLightNode
+        )
+
+        // MARK: Ambient light
+
         ambientNode.light = SCNLight()
         ambientNode.light?.type = .ambient
         ambientNode.light?.intensity = 550
         ambientNode.light?.color = UIColor.white
-        scene.rootNode.addChildNode(ambientNode)
 
-        scene.background.contents = UIColor.systemBackground
+        scene.rootNode.addChildNode(
+            ambientNode
+        )
+
+        scene.background.contents =
+            UIColor.systemBackground
     }
 
-    func attach(to view: SCNView) {
+    // MARK: - Attach view
+
+    func attach(
+        to view: SCNView
+    ) {
+
         self.view = view
 
-        view.pointOfView = cameraNode
+        view.pointOfView =
+            cameraNode
 
         resetCamera()
     }
+
+    // MARK: - Load mesh
 
     func setMesh(
         _ mesh: Climb3DMesh,
         route: Climb3DRoute
     ) {
+
         self.mesh = mesh
+        self.route = route
 
-        meshNode.geometry = mesh.sceneGeometry()
+        meshNode.geometry =
+            mesh.sceneGeometry()
 
-        rebuildRoute(mesh.centerline)
+        rebuildRoute(
+            mesh.centerline
+        )
 
         markerNode.isHidden = false
 
@@ -88,40 +121,163 @@ final class Climb3DSceneController {
         resetCamera()
     }
 
-    func updateProgress(_ progress: Double) {
-        guard let mesh,
-              !mesh.centerline.isEmpty
+    // MARK: - Progress
+
+    func updateProgress(
+        _ progress: Double
+    ) {
+
+        guard
+            let mesh,
+            let route,
+            !mesh.centerline.isEmpty,
+            !route.points.isEmpty
         else {
+
             markerNode.isHidden = true
             return
         }
 
-        let p = min(1, max(0, progress))
-
-        let scaled =
-            p * Double(mesh.centerline.count - 1)
-
-        let low = Int(floor(scaled))
-
-        let high =
+        let p =
             min(
-                mesh.centerline.count - 1,
-                low + 1
+                1,
+                max(
+                    0,
+                    progress
+                )
+            )
+
+        /*
+         Progress is now based on REAL GPX DISTANCE,
+         not on the number of GPX samples.
+        */
+
+        let targetDistance =
+            p *
+            route.totalDistanceM
+
+        // Start
+        if targetDistance <= 0 {
+
+            setMarker(
+                at: mesh.centerline[0]
+            )
+
+            return
+        }
+
+        // End
+        if targetDistance >= route.totalDistanceM {
+
+            setMarker(
+                at: mesh.centerline[
+                    mesh.centerline.count - 1
+                ]
+            )
+
+            return
+        }
+
+        /*
+         Binary search for the two GPX points
+         surrounding the requested distance.
+        */
+
+        var low = 0
+
+        var high =
+            min(
+                route.points.count,
+                mesh.centerline.count
+            ) - 1
+
+        while low + 1 < high {
+
+            let middle =
+                (low + high) / 2
+
+            if route.points[middle].distanceM <
+                targetDistance {
+
+                low = middle
+
+            } else {
+
+                high = middle
+            }
+        }
+
+        let routeA =
+            route.points[low]
+
+        let routeB =
+            route.points[high]
+
+        let pointA =
+            mesh.centerline[low]
+
+        let pointB =
+            mesh.centerline[high]
+
+        let segmentDistance =
+            max(
+                0.001,
+                routeB.distanceM -
+                routeA.distanceM
             )
 
         let t =
             Float(
-                scaled - Double(low)
+                (
+                    targetDistance -
+                    routeA.distanceM
+                ) /
+                segmentDistance
             )
 
-        let a = mesh.centerline[low]
-        let b = mesh.centerline[high]
+        let position =
+            Climb3DVertex(
 
-        markerNode.position = SCNVector3(
-            a.x + (b.x - a.x) * t,
-            a.y + (b.y - a.y) * t + 4.0,
-            a.z + (b.z - a.z) * t
+                x:
+                    pointA.x +
+                    (
+                        pointB.x -
+                        pointA.x
+                    ) *
+                    t,
+
+                y:
+                    pointA.y +
+                    (
+                        pointB.y -
+                        pointA.y
+                    ) *
+                    t,
+
+                z:
+                    pointA.z +
+                    (
+                        pointB.z -
+                        pointA.z
+                    ) *
+                    t
+            )
+
+        setMarker(
+            at: position
         )
+    }
+
+    private func setMarker(
+        at point: Climb3DVertex
+    ) {
+
+        markerNode.position =
+            SCNVector3(
+                point.x,
+                point.y + 5.0,
+                point.z
+            )
 
         markerNode.isHidden = false
     }
@@ -129,9 +285,12 @@ final class Climb3DSceneController {
     // MARK: - Automatic camera
 
     func resetCamera() {
-        guard let mesh,
-              !mesh.vertices.isEmpty
+
+        guard
+            let mesh,
+            !mesh.vertices.isEmpty
         else {
+
             cameraNode.position =
                 SCNVector3(
                     150,
@@ -146,9 +305,14 @@ final class Climb3DSceneController {
             return
         }
 
-        let xs = mesh.vertices.map(\.x)
-        let ys = mesh.vertices.map(\.y)
-        let zs = mesh.vertices.map(\.z)
+        let xs =
+            mesh.vertices.map(\.x)
+
+        let ys =
+            mesh.vertices.map(\.y)
+
+        let zs =
+            mesh.vertices.map(\.z)
 
         guard
             let minX = xs.min(),
@@ -161,15 +325,24 @@ final class Climb3DSceneController {
             return
         }
 
-        let center = SCNVector3(
-            (minX + maxX) / 2,
-            (minY + maxY) / 2,
-            (minZ + maxZ) / 2
-        )
+        let center =
+            SCNVector3(
 
-        let widthX = maxX - minX
-        let heightY = maxY - minY
-        let depthZ = maxZ - minZ
+                (minX + maxX) / 2,
+
+                (minY + maxY) / 2,
+
+                (minZ + maxZ) / 2
+            )
+
+        let widthX =
+            maxX - minX
+
+        let heightY =
+            maxY - minY
+
+        let depthZ =
+            maxZ - minZ
 
         let horizontalSize =
             max(
@@ -177,10 +350,15 @@ final class Climb3DSceneController {
                 depthZ
             )
 
+        /*
+         Elevation should influence framing,
+         but should not dominate it.
+        */
+
         let modelSize =
             max(
                 horizontalSize,
-                heightY * 1.5
+                heightY * 1.3
             )
 
         let radius =
@@ -190,26 +368,28 @@ final class Climb3DSceneController {
             )
 
         /*
-         Automatic isometric-style view.
-
-         Higher Y = more top-down.
-         X/Z offset gives depth perception.
-
-         This is intentionally less steep than
-         the previous camera.
+         Perspective overview:
+         high enough to understand route shape,
+         low enough to perceive climbing.
         */
 
         let cameraDistance =
-            radius * 1.45
+            radius * 1.30
 
         let cameraHeight =
-            radius * 1.10
+            radius * 0.85
 
         cameraNode.position =
             SCNVector3(
-                center.x + cameraDistance * 0.72,
-                center.y + cameraHeight,
-                center.z + cameraDistance
+
+                center.x +
+                cameraDistance * 0.70,
+
+                center.y +
+                cameraHeight,
+
+                center.z +
+                cameraDistance
             )
 
         cameraNode.look(
@@ -218,12 +398,19 @@ final class Climb3DSceneController {
 
         keyLightNode.position =
             SCNVector3(
-                center.x + radius * 0.8,
-                center.y + radius * 1.8,
-                center.z + radius
+
+                center.x +
+                radius * 0.8,
+
+                center.y +
+                radius * 1.8,
+
+                center.z +
+                radius
             )
 
-        view?.pointOfView = cameraNode
+        view?.pointOfView =
+            cameraNode
     }
 
     // MARK: - Route rendering
@@ -231,29 +418,35 @@ final class Climb3DSceneController {
     private func rebuildRoute(
         _ points: [Climb3DVertex]
     ) {
+
         routeNode.childNodes.forEach {
             $0.removeFromParentNode()
         }
 
-        guard points.count >= 2 else {
+        guard points.count >= 2
+        else {
             return
         }
 
-        for i in 1..<points.count {
-            let a = points[i - 1]
-            let b = points[i]
+        for index in 1..<points.count {
+
+            let a =
+                points[index - 1]
+
+            let b =
+                points[index]
 
             let start =
                 SCNVector3(
                     a.x,
-                    a.y + 1.0,
+                    a.y + 0.8,
                     a.z
                 )
 
             let end =
                 SCNVector3(
                     b.x,
-                    b.y + 1.0,
+                    b.y + 0.8,
                     b.z
                 )
 
@@ -271,9 +464,14 @@ final class Climb3DSceneController {
         to b: SCNVector3
     ) -> SCNNode {
 
-        let dx = b.x - a.x
-        let dy = b.y - a.y
-        let dz = b.z - a.z
+        let dx =
+            b.x - a.x
+
+        let dy =
+            b.y - a.y
+
+        let dz =
+            b.z - a.z
 
         let length =
             sqrt(
@@ -292,7 +490,8 @@ final class Climb3DSceneController {
             UIColor.systemBlue
 
         cylinder.firstMaterial?.emission.contents =
-            UIColor.systemBlue.withAlphaComponent(0.18)
+            UIColor.systemBlue
+                .withAlphaComponent(0.18)
 
         let node =
             SCNNode(
@@ -301,8 +500,11 @@ final class Climb3DSceneController {
 
         node.position =
             SCNVector3(
+
                 (a.x + b.x) / 2,
+
                 (a.y + b.y) / 2,
+
                 (a.z + b.z) / 2
             )
 
