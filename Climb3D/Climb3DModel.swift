@@ -4,7 +4,6 @@ import Foundation
 final class Climb3DModel: ObservableObject {
     @Published var progress: Double = 0 {
         didSet {
-            progress = min(1, max(0, progress))
             sceneController.updateProgress(progress)
         }
     }
@@ -20,6 +19,7 @@ final class Climb3DModel: ObservableObject {
 
     func loadGPXAndBuild3D(url: URL) throws {
         let access = url.startAccessingSecurityScopedResource()
+
         defer {
             if access {
                 url.stopAccessingSecurityScopedResource()
@@ -32,10 +32,14 @@ final class Climb3DModel: ObservableObject {
         route = parsed
         mesh = generated
 
-        sceneController.setMesh(generated, route: parsed)
+        sceneController.setMesh(
+            generated,
+            route: parsed
+        )
 
         hasGPX = true
         hasMesh = true
+
         progress = 0
 
         status = String(
@@ -50,12 +54,16 @@ final class Climb3DModel: ObservableObject {
                 domain: "Climb3D",
                 code: 1,
                 userInfo: [
-                    NSLocalizedDescriptionKey: "No 3D mesh available"
+                    NSLocalizedDescriptionKey:
+                        "No 3D mesh available"
                 ]
             )
         }
 
-        return try STLWriter().write(mesh: mesh, filename: "Climb3D")
+        return try STLWriter().write(
+            mesh: mesh,
+            filename: "Climb3D"
+        )
     }
 
     func resetCamera() {
