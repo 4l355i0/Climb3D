@@ -2,53 +2,20 @@ import Foundation
 
 struct Climb3DMeshBuilder {
 
-    /*
-     VISUAL MODEL ONLY
+    let pathHalfWidthM: Double = 6.0
+    let verticalExaggeration: Double = 5.0
+    let baseHeightM: Double = 8.0
+    let centerlineLiftM: Double = 2.0
+    let miterLimit: Double = 2.5
 
-     RideClimb remains authoritative for:
-     - physical gradient
-     - trainer resistance
-     - distance/progress
-    */
-
-    // Visible road width = 10 m
-    let roadHalfWidthM: Double = 5.0
-
-    /*
-     Base width = 36 m.
-
-     The lower part is deliberately wider than
-     the road, creating a connected pedestal /
-     terrain reference without producing the
-     huge intersecting surfaces of the previous
-     terrain implementation.
-    */
-    let baseHalfWidthM: Double = 18.0
-
-    // Local depth below the road.
-    let baseDepthM: Double = 12.0
-
-    /*
-     Visual exaggeration only.
-     Higher than reality on purpose to make
-     climbing immediately readable.
-    */
-    let verticalExaggeration: Double = 2.4
-
-    let roadLiftM: Double = 0.8
-    let centerlineLiftM: Double = 1.5
-
-    func build(
-        from route: Climb3DRoute
-    ) throws -> Climb3DMesh {
+    func build(from route: Climb3DRoute) throws -> Climb3DMesh {
 
         guard route.points.count >= 2 else {
             throw NSError(
                 domain: "Climb3D.Mesh",
                 code: 1,
                 userInfo: [
-                    NSLocalizedDescriptionKey:
-                        "Route too short"
+                    NSLocalizedDescriptionKey: "Route too short"
                 ]
             )
         }
@@ -56,56 +23,28 @@ struct Climb3DMeshBuilder {
         let first = route.points[0]
 
         let latScale = 111_320.0
-
         let lonScale =
             111_320.0 *
-            cos(
-                first.latitude *
-                .pi /
-                180
-            )
+            cos(first.latitude * .pi / 180)
 
-        let minElevation =
+        let minimumElevation =
             route.points
                 .map(\.elevationM)
                 .min() ?? 0
 
-        /*
-         Coordinate system:
-
-         X = east / west
-         Y = elevation
-         Z = north / south
-        */
-        let points:
-            [
-                (
-                    x: Double,
-                    y: Double,
-                    z: Double
-                )
-            ] =
+        let points: [(x: Double, y: Double, z: Double)] =
             route.points.map { point in
 
                 let x =
-                    (
-                        point.longitude -
-                        first.longitude
-                    ) *
+                    (point.longitude - first.longitude) *
                     lonScale
 
                 let z =
-                    -(
-                        point.latitude -
-                        first.latitude
-                    ) *
+                    -(point.latitude - first.latitude) *
                     latScale
 
                 let y =
-                    (
-                        point.elevationM -
-                        minElevation
-                    ) *
+                    (point.elevationM - minimumElevation) *
                     verticalExaggeration
 
                 return (
@@ -115,29 +54,132 @@ struct Climb3DMeshBuilder {
                 )
             }
 
-        /*
-         Cross-section:
+        var leftXZ: [(x: Double, z: Double)] = []
+        var rightXZ: [(x: Double, z: Double)] = []
 
-                   ROAD
-              ┌──────────┐
-             /            \
-            /              \
-           └────────────────┘
-                 BASE
+        leftXZ.reserveCapacity(points.count)
+        rightXZ.reserveCapacity(points.count)
 
-         top-left / top-right
-         bottom-left / bottom-right
+        for index in points.indices {
 
-         The bottom follows the local road elevation,
-         therefore we never create a wall extending
-         down to a global zero plane.
-        */
+            let current = points[index]
 
-        var vertices:
-            [Climb3DVertex] = []
+            let previous =
+                points[max(0, index - 1)]
 
-        var centerline:
-            [Climb3DVertex] = []
+            let next =
+                points[min(points.count - 1, index + 1)]
+
+            let incoming = normalized2D(
+                x: current.x - previous.x,
+                z: current.z - previous.z
+            )
+
+            let outgoing = normalized2D(
+                x: next.x - current.x,
+                z: next.z - current.z
+            )
+
+            let direction: (
+                x: Double,
+                z: Double
+            )
+
+            if index == 0 {
+
+                direction = outgoing
+
+            } else if index == points.count - 1 {
+
+                direction = incoming
+
+            } else {
+
+                let sum = normalized2D(
+                    x: incoming.x + outgoing.x,
+                    z: incoming.z + outgoing.z
+                )
+
+                if abs(sum.x) < 0.000001 &&
+                    abs(sum.z) < 0.000001 {
+
+                    direction = outgoing
+
+                } else {
+
+                    direction = sum
+                }
+            }
+
+            let baseNormal = normalized2D(
+                x: -direction.z,
+                z: direction.x
+            )
+
+            var offsetDistance =
+                pathHalfWidthM
+
+            if index > 0 &&
+                index < points.count - 1 {
+
+                let outgoingNormal =
+                    normalized2D(
+                        x: -outgoing.z,
+                        z: outgoing.x
+                    )
+
+                let dot =
+                    baseNormal.x *
+                    outgoingNormal.x +
+                    baseNormal.z *
+                    outgoingNormal.z
+
+                if abs(dot) > 0.15 {
+
+                    offsetDistance =
+                        pathHalfWidthM /
+                        abs(dot)
+                }
+
+                offsetDistance = min(
+                    offsetDistance,
+                    pathHalfWidthM * miterLimit
+                )
+            }
+
+            leftXZ.append(
+                (
+                    x:
+                        current.x +
+                        baseNormal.x *
+                        offsetDistance,
+
+                    z:
+                        current.z +
+                        baseNormal.z *
+                        offsetDistance
+                )
+            )
+
+            rightXZ.append(
+                (
+                    x:
+                        current.x -
+                        baseNormal.x *
+                        offsetDistance,
+
+                    z:
+                        current.z -
+                        baseNormal.z *
+                        offsetDistance
+                )
+            )
+        }
+
+        let baseY = -baseHeightM
+
+        var vertices: [Climb3DVertex] = []
+        var centerline: [Climb3DVertex] = []
 
         vertices.reserveCapacity(
             points.count * 4
@@ -149,161 +191,39 @@ struct Climb3DMeshBuilder {
 
         for index in points.indices {
 
-            let point =
-                points[index]
+            let point = points[index]
+            let left = leftXZ[index]
+            let right = rightXZ[index]
 
-            let previous =
-                points[
-                    max(
-                        0,
-                        index - 1
-                    )
-                ]
-
-            let next =
-                points[
-                    min(
-                        points.count - 1,
-                        index + 1
-                    )
-                ]
-
-            var dx =
-                next.x -
-                previous.x
-
-            var dz =
-                next.z -
-                previous.z
-
-            var length =
-                sqrt(
-                    dx * dx +
-                    dz * dz
-                )
-
-            if length < 0.001 {
-
-                if index > 0 {
-
-                    dx =
-                        point.x -
-                        previous.x
-
-                    dz =
-                        point.z -
-                        previous.z
-
-                    length =
-                        sqrt(
-                            dx * dx +
-                            dz * dz
-                        )
-                }
-            }
-
-            if length < 0.001 {
-                dx = 1
-                dz = 0
-                length = 1
-            }
-
-            /*
-             Horizontal normal to the route.
-            */
-            let nx =
-                -dz /
-                length
-
-            let nz =
-                dx /
-                length
-
-            // MARK: Road top
-
-            let topLeftX =
-                point.x +
-                nx *
-                roadHalfWidthM
-
-            let topLeftZ =
-                point.z +
-                nz *
-                roadHalfWidthM
-
-            let topRightX =
-                point.x -
-                nx *
-                roadHalfWidthM
-
-            let topRightZ =
-                point.z -
-                nz *
-                roadHalfWidthM
-
-            // MARK: Wider base
-
-            let bottomLeftX =
-                point.x +
-                nx *
-                baseHalfWidthM
-
-            let bottomLeftZ =
-                point.z +
-                nz *
-                baseHalfWidthM
-
-            let bottomRightX =
-                point.x -
-                nx *
-                baseHalfWidthM
-
-            let bottomRightZ =
-                point.z -
-                nz *
-                baseHalfWidthM
-
-            let topY =
-                point.y +
-                roadLiftM
-
-            let bottomY =
-                point.y -
-                baseDepthM
-
-            // Top left
             vertices.append(
                 Climb3DVertex(
-                    x: Float(topLeftX),
-                    y: Float(topY),
-                    z: Float(topLeftZ)
+                    x: Float(left.x),
+                    y: Float(point.y),
+                    z: Float(left.z)
                 )
             )
 
-            // Top right
             vertices.append(
                 Climb3DVertex(
-                    x: Float(topRightX),
-                    y: Float(topY),
-                    z: Float(topRightZ)
+                    x: Float(right.x),
+                    y: Float(point.y),
+                    z: Float(right.z)
                 )
             )
 
-            // Bottom left
             vertices.append(
                 Climb3DVertex(
-                    x: Float(bottomLeftX),
-                    y: Float(bottomY),
-                    z: Float(bottomLeftZ)
+                    x: Float(left.x),
+                    y: Float(baseY),
+                    z: Float(left.z)
                 )
             )
 
-            // Bottom right
             vertices.append(
                 Climb3DVertex(
-                    x: Float(bottomRightX),
-                    y: Float(bottomY),
-                    z: Float(bottomRightZ)
+                    x: Float(right.x),
+                    y: Float(baseY),
+                    z: Float(right.z)
                 )
             )
 
@@ -319,26 +239,21 @@ struct Climb3DMeshBuilder {
             )
         }
 
-        var triangles:
-            [Climb3DTriangle] = []
+        var triangles: [Climb3DTriangle] = []
 
         func idx(
-            _ point: Int,
+            _ pointIndex: Int,
             _ offset: Int
         ) -> Int32 {
 
             Int32(
-                point * 4 +
+                pointIndex * 4 +
                 offset
             )
         }
 
-        for index in
-            0..<(points.count - 1) {
+        for index in 0..<(points.count - 1) {
 
-            /*
-             TOP ROAD
-            */
             triangles.append(
                 Climb3DTriangle(
                     a: idx(index, 0),
@@ -355,9 +270,6 @@ struct Climb3DMeshBuilder {
                 )
             )
 
-            /*
-             LEFT SLOPED SIDE
-            */
             triangles.append(
                 Climb3DTriangle(
                     a: idx(index, 2),
@@ -374,9 +286,6 @@ struct Climb3DMeshBuilder {
                 )
             )
 
-            /*
-             RIGHT SLOPED SIDE
-            */
             triangles.append(
                 Climb3DTriangle(
                     a: idx(index, 1),
@@ -393,9 +302,6 @@ struct Climb3DMeshBuilder {
                 )
             )
 
-            /*
-             BOTTOM BASE
-            */
             triangles.append(
                 Climb3DTriangle(
                     a: idx(index, 2),
@@ -413,9 +319,6 @@ struct Climb3DMeshBuilder {
             )
         }
 
-        /*
-         Front cap
-        */
         triangles.append(
             Climb3DTriangle(
                 a: idx(0, 2),
@@ -435,9 +338,6 @@ struct Climb3DMeshBuilder {
         let last =
             points.count - 1
 
-        /*
-         Rear cap
-        */
         triangles.append(
             Climb3DTriangle(
                 a: idx(last, 0),
@@ -458,6 +358,33 @@ struct Climb3DMeshBuilder {
             vertices: vertices,
             triangles: triangles,
             centerline: centerline
+        )
+    }
+
+    private func normalized2D(
+        x: Double,
+        z: Double
+    ) -> (
+        x: Double,
+        z: Double
+    ) {
+
+        let length =
+            sqrt(
+                x * x +
+                z * z
+            )
+
+        guard length > 0.000001 else {
+            return (
+                x: 0,
+                z: 0
+            )
+        }
+
+        return (
+            x: x / length,
+            z: z / length
         )
     }
 }
