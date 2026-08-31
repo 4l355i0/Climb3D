@@ -25,21 +25,20 @@ final class Climb3DSceneController {
     private var currentProgress: Double = 0
     private var followMode = true
 
-    // Build 13: close third-person rider view.
-    // Camera position follows the route itself instead of being projected
-    // backwards from a long look-ahead vector. This prevents the camera
-    // from cutting through the inside of tight hairpins.
-    private let cameraBehindM: Double = 15
-    private let cameraHeightM: Float = 7.5
-    private let lookAheadM: Double = 14
-    private let startBackwardOffsetM: Double = 12
+    // Build 14 rider view. Position is taken from the actual route behind
+    // the rider, so the camera follows a hairpin rather than cutting across it.
+    private let cameraBehindM: Double = 12
+    private let cameraHeightM: Float = 5.8
+    private let lookAheadM: Double = 16
+    private let startBackwardOffsetM: Double = 10
 
     init() {
 
+        // Build 13 marker was 3.6 m in diameter and obscured the road.
         let markerGeometry =
-            SCNSphere(radius: 1.8)
+            SCNSphere(radius: 0.78)
 
-        markerGeometry.segmentCount = 28
+        markerGeometry.segmentCount = 24
 
         markerGeometry
             .firstMaterial?
@@ -50,7 +49,7 @@ final class Climb3DSceneController {
             .firstMaterial?
             .emission.contents =
             UIColor.systemRed
-                .withAlphaComponent(0.32)
+                .withAlphaComponent(0.28)
 
         markerGeometry
             .firstMaterial?
@@ -75,8 +74,8 @@ final class Climb3DSceneController {
 
         let camera = SCNCamera()
 
-        camera.fieldOfView = 62
-        camera.zNear = 0.2
+        camera.fieldOfView = 66
+        camera.zNear = 0.12
         camera.zFar = 50_000
         camera.automaticallyAdjustsZRange = true
         camera.wantsHDR = true
@@ -86,23 +85,12 @@ final class Climb3DSceneController {
         scene.rootNode
             .addChildNode(cameraNode)
 
-        keyLightNode.light =
-            SCNLight()
-
-        keyLightNode.light?.type =
-            .directional
-
-        keyLightNode.light?.intensity =
-            1500
-
-        keyLightNode.light?.castsShadow =
-            true
-
-        keyLightNode.light?.shadowRadius =
-            5
-
-        keyLightNode.light?.shadowSampleCount =
-            12
+        keyLightNode.light = SCNLight()
+        keyLightNode.light?.type = .directional
+        keyLightNode.light?.intensity = 1450
+        keyLightNode.light?.castsShadow = true
+        keyLightNode.light?.shadowRadius = 4
+        keyLightNode.light?.shadowSampleCount = 12
 
         keyLightNode.eulerAngles =
             SCNVector3(
@@ -114,14 +102,9 @@ final class Climb3DSceneController {
         scene.rootNode
             .addChildNode(keyLightNode)
 
-        fillLightNode.light =
-            SCNLight()
-
-        fillLightNode.light?.type =
-            .directional
-
-        fillLightNode.light?.intensity =
-            420
+        fillLightNode.light = SCNLight()
+        fillLightNode.light?.type = .directional
+        fillLightNode.light?.intensity = 390
 
         fillLightNode.eulerAngles =
             SCNVector3(
@@ -133,22 +116,14 @@ final class Climb3DSceneController {
         scene.rootNode
             .addChildNode(fillLightNode)
 
-        ambientNode.light =
-            SCNLight()
-
-        ambientNode.light?.type =
-            .ambient
-
-        ambientNode.light?.intensity =
-            420
-
-        ambientNode.light?.color =
-            UIColor.white
+        ambientNode.light = SCNLight()
+        ambientNode.light?.type = .ambient
+        ambientNode.light?.intensity = 400
+        ambientNode.light?.color = UIColor.white
 
         scene.rootNode
             .addChildNode(ambientNode)
 
-        // Sky-like background gives the road/climb a readable horizon.
         scene.background.contents =
             UIColor(
                 red: 0.55,
@@ -163,6 +138,9 @@ final class Climb3DSceneController {
         self.view = view
         view.pointOfView = cameraNode
 
+        // No default SceneKit camera control while follow mode is active.
+        // The existing SwiftUI/SceneKit wrapper can still disable follow mode
+        // before user manipulation, as in Build 13.
         if mesh != nil {
 
             updateFollowCamera(
@@ -180,10 +158,12 @@ final class Climb3DSceneController {
         self.mesh = mesh
         self.route = route
 
+        // sceneGeometry() now returns only the visual road top. STL walls,
+        // bottom and base remain in mesh.vertices/triangles for STLWriter.
         meshNode.geometry =
             mesh.sceneGeometry()
 
-        meshNode.castsShadow = true
+        meshNode.castsShadow = false
 
         rebuildRoute(
             mesh.centerline
@@ -219,14 +199,13 @@ final class Climb3DSceneController {
         let position =
             meshPosition(
                 atDistanceM:
-                    p *
-                    route.totalDistanceM
+                    p * route.totalDistanceM
             )
 
         markerNode.position =
             SCNVector3(
                 position.x,
-                position.y + 2.2,
+                position.y + 0.82,
                 position.z
             )
 
@@ -254,8 +233,7 @@ final class Climb3DSceneController {
         }
 
         let currentDistance =
-            progress *
-            route.totalDistanceM
+            progress * route.totalDistanceM
 
         let current =
             meshPosition(
@@ -279,9 +257,6 @@ final class Climb3DSceneController {
 
         if currentDistance >= cameraBehindM {
 
-            // Normal case: put the camera over a real point of the route
-            // behind the rider. On a hairpin this keeps the camera on the
-            // incoming road instead of cutting through the mountain.
             let behind =
                 meshPosition(
                     atDistanceM:
@@ -297,8 +272,6 @@ final class Climb3DSceneController {
 
         } else {
 
-            // At the very beginning there is no route behind the rider,
-            // so extrapolate backwards from the first local direction.
             let dx =
                 Double(future.x - current.x)
 
@@ -314,19 +287,27 @@ final class Climb3DSceneController {
             cameraPosition =
                 SCNVector3(
                     current.x -
-                        Float(dx / length * startBackwardOffsetM),
+                        Float(
+                            dx / length *
+                            startBackwardOffsetM
+                        ),
+
                     current.y + cameraHeightM,
+
                     current.z -
-                        Float(dz / length * startBackwardOffsetM)
+                        Float(
+                            dz / length *
+                            startBackwardOffsetM
+                        )
                 )
         }
 
-        // The target is deliberately local. Build 12 looked 105 m ahead,
-        // which could already be on the next leg of a hairpin.
+        // Keep target local. A long target can land on the next leg of a
+        // hairpin and make the camera appear to look through the turn.
         let target =
             SCNVector3(
                 future.x,
-                future.y + 1.4,
+                future.y + 0.65,
                 future.z
             )
 
@@ -337,18 +318,8 @@ final class Climb3DSceneController {
 
             self.cameraNode.look(
                 at: target,
-                up:
-                    SCNVector3(
-                        0,
-                        1,
-                        0
-                    ),
-                localFront:
-                    SCNVector3(
-                        0,
-                        0,
-                        -1
-                    )
+                up: SCNVector3(0, 1, 0),
+                localFront: SCNVector3(0, 0, -1)
             )
 
             self.view?.pointOfView =
@@ -358,9 +329,7 @@ final class Climb3DSceneController {
         if animated {
 
             SCNTransaction.begin()
-
-            SCNTransaction.animationDuration =
-                0.16
+            SCNTransaction.animationDuration = 0.14
 
             SCNTransaction.animationTimingFunction =
                 CAMediaTimingFunction(
@@ -368,11 +337,9 @@ final class Climb3DSceneController {
                 )
 
             apply()
-
             SCNTransaction.commit()
 
         } else {
-
             apply()
         }
     }
@@ -416,10 +383,7 @@ final class Climb3DSceneController {
         let target =
             min(
                 route.totalDistanceM,
-                max(
-                    0,
-                    distanceM
-                )
+                max(0, distanceM)
             )
 
         if target <= 0 {
@@ -445,28 +409,18 @@ final class Climb3DSceneController {
             let mid =
                 (low + high) / 2
 
-            if route.points[mid].distanceM <
-                target {
-
+            if route.points[mid].distanceM < target {
                 low = mid
-
             } else {
-
                 high = mid
             }
         }
 
-        let routeA =
-            route.points[low]
+        let routeA = route.points[low]
+        let routeB = route.points[high]
 
-        let routeB =
-            route.points[high]
-
-        let a =
-            mesh.centerline[low]
-
-        let b =
-            mesh.centerline[high]
+        let a = mesh.centerline[low]
+        let b = mesh.centerline[high]
 
         let span =
             max(
@@ -487,18 +441,15 @@ final class Climb3DSceneController {
         return Climb3DVertex(
             x:
                 a.x +
-                (b.x - a.x) *
-                t,
+                (b.x - a.x) * t,
 
             y:
                 a.y +
-                (b.y - a.y) *
-                t,
+                (b.y - a.y) * t,
 
             z:
                 a.z +
-                (b.z - a.z) *
-                t
+                (b.z - a.z) * t
         )
     }
 
@@ -517,8 +468,6 @@ final class Climb3DSceneController {
             return
         }
 
-        // Keep the visual centerline subtle. The red marker remains the
-        // primary rider/progress indicator.
         for i in 1..<points.count {
 
             let a = points[i - 1]
@@ -529,14 +478,14 @@ final class Climb3DSceneController {
                     from:
                         SCNVector3(
                             a.x,
-                            a.y + 0.35,
+                            a.y + 0.08,
                             a.z
                         ),
 
                     to:
                         SCNVector3(
                             b.x,
-                            b.y + 0.35,
+                            b.y + 0.08,
                             b.z
                         )
                 )
@@ -562,23 +511,23 @@ final class Climb3DSceneController {
 
         let cylinder =
             SCNCylinder(
-                radius: 0.16,
+                radius: 0.075,
                 height: CGFloat(length)
             )
 
-        cylinder.radialSegmentCount = 6
+        cylinder.radialSegmentCount = 5
 
         cylinder
             .firstMaterial?
             .diffuse.contents =
             UIColor.white
-                .withAlphaComponent(0.88)
+                .withAlphaComponent(0.78)
 
         cylinder
             .firstMaterial?
             .emission.contents =
             UIColor.white
-                .withAlphaComponent(0.12)
+                .withAlphaComponent(0.08)
 
         let node =
             SCNNode(
@@ -594,21 +543,12 @@ final class Climb3DSceneController {
 
         node.look(
             at: b,
-            up:
-                SCNVector3(
-                    0,
-                    1,
-                    0
-                ),
-            localFront:
-                SCNVector3(
-                    0,
-                    1,
-                    0
-                )
+            up: SCNVector3(0, 1, 0),
+            localFront: SCNVector3(0, 1, 0)
         )
 
         return node
     }
 }
+
 
