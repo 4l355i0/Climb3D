@@ -2,26 +2,19 @@ import Foundation
 
 struct Climb3DMeshBuilder {
 
-    // STL solid dimensions are retained from Build 13 so STLWriter keeps
-    // receiving a closed GPXtruder-style solid.
+    // Closed solid retained for STL export.
     let stlHalfWidthM: Double = 5.0
     let stlJoinLimitMultiplier: Double = 2.0
 
-    // Build 14 visual road is intentionally much narrower than the solid.
-    // It is rendered independently, so the STL walls never appear on screen.
+    // Build 15 visual road: one continuous ribbon.
     let visualHalfWidthM: Double = 3.0
 
-    // Small overlap at the end of each independent road segment fills the
-    // inside wedge of normal bends without creating a long miter at hairpins.
-    let visualSegmentOverlapM: Double = 1.0
+    // Tight clamp keeps the ribbon continuous without producing the
+    // long spikes that appeared on hairpins in earlier builds.
+    let visualJoinLimitMultiplier: Double = 1.30
 
-    // GPXtruder-style vertical exaggeration.
     let verticalExaggeration: Double = 5.0
-
     let baseHeightM: Double = 8.0
-
-    // Keep centerline almost on the visual road. Build 13 lifted it by more
-    // than a metre, making the white line and marker look detached.
     let centerlineLiftM: Double = 0.10
 
     private struct ProjectedPoint {
@@ -54,8 +47,8 @@ struct Climb3DMeshBuilder {
                 .map(\.elevationM)
                 .min() ?? 0
 
-        // Full centerline remains 1:1 with route.points. Marker and camera
-        // therefore continue to interpolate against route.distanceM exactly.
+        // Full centerline remains 1:1 with the GPX route.
+        // Marker/camera therefore remain driven by route distance exactly.
         let allPoints: [ProjectedPoint] =
             route.points.map { point in
 
@@ -78,8 +71,8 @@ struct Climb3DMeshBuilder {
                 )
             }
 
-        // Same path preparation as Build 13: remove only pathological
-        // near-duplicates. No XY moving average, so hairpins are not cut.
+        // Keep the Build 13/14 path preparation: remove only pathological
+        // near-duplicates/reversals, without XY smoothing that cuts hairpins.
         let meshPoints =
             prepareMeshPath(allPoints)
 
@@ -156,7 +149,6 @@ struct Climb3DMeshBuilder {
             _ pointIndex: Int,
             _ offset: Int
         ) -> Int32 {
-
             Int32(pointIndex * 4 + offset)
         }
 
@@ -268,16 +260,50 @@ struct Climb3DMeshBuilder {
         )
 
         // -----------------------------------------------------------------
-        // 2) VISUAL ROAD ONLY
+        // 2) CONTINUOUS VISUAL ROAD
         // -----------------------------------------------------------------
-        // Every road leg is an independent bounded quad. There is no miter
-        // intersection at a hairpin, therefore no giant triangular spike or
-        // wall can shoot across the inside of the turn.
+        // Build 14 used four unique vertices per segment, which solved the
+        // giant hairpin spikes but made the road look tiled. Build 15 creates
+        // one left/right pair per path point and shares those vertices between
+        // adjacent segments. The result is a single continuous ribbon.
+        //
+        // Join length is deliberately clamped to 1.30 x half-width, so even
+        // sharp bends cannot generate the huge miter triangles seen earlier.
+
+        let visualEdges =
+            buildBufferedEdges(
+                meshPoints,
+                halfWidth: visualHalfWidthM,
+                joinLimitMultiplier: visualJoinLimitMultiplier
+            )
 
         var visualVertices: [Climb3DVertex] = []
-        var visualSegmentGrades: [Double] = []
+        visualVertices.reserveCapacity(meshPoints.count * 2)
 
-        visualVertices.reserveCapacity((meshPoints.count - 1) * 4)
+        for index in meshPoints.indices {
+
+            let point = meshPoints[index]
+            let edge = visualEdges[index]
+
+            // left, right -- shared by the previous and next segment.
+            visualVertices.append(
+                Climb3DVertex(
+                    x: Float(edge.left.x),
+                    y: Float(point.y),
+                    z: Float(edge.left.z)
+                )
+            )
+
+            visualVertices.append(
+                Climb3DVertex(
+                    x: Float(edge.right.x),
+                    y: Float(point.y),
+                    z: Float(edge.right.z)
+                )
+            )
+        }
+
+        var visualSegmentGrades: [Double] = []
         visualSegmentGrades.reserveCapacity(meshPoints.count - 1)
 
         for index in 0..<(meshPoints.count - 1) {
@@ -285,71 +311,15 @@ struct Climb3DMeshBuilder {
             let a = meshPoints[index]
             let b = meshPoints[index + 1]
 
-            let dx = b.x - a.x
-            let dz = b.z - a.z
-
             let horizontalLength =
-                sqrt(dx * dx + dz * dz)
+                horizontalDistance(a, b)
 
             guard horizontalLength > 0.001 else {
+                visualSegmentGrades.append(0)
                 continue
             }
 
-            let dirX = dx / horizontalLength
-            let dirZ = dz / horizontalLength
-
-            let normalX = -dirZ
-            let normalZ = dirX
-
-            // Keep overlap small and bounded. It closes normal corner wedges
-            // but never scales with turn angle, unlike a miter join.
-            let overlap =
-                min(
-                    visualSegmentOverlapM,
-                    horizontalLength * 0.15
-                )
-
-            let startX = a.x - dirX * overlap
-            let startZ = a.z - dirZ * overlap
-
-            let endX = b.x + dirX * overlap
-            let endZ = b.z + dirZ * overlap
-
-            // Four unique vertices for this segment.
-            visualVertices.append(
-                Climb3DVertex(
-                    x: Float(startX + normalX * visualHalfWidthM),
-                    y: Float(a.y),
-                    z: Float(startZ + normalZ * visualHalfWidthM)
-                )
-            )
-
-            visualVertices.append(
-                Climb3DVertex(
-                    x: Float(startX - normalX * visualHalfWidthM),
-                    y: Float(a.y),
-                    z: Float(startZ - normalZ * visualHalfWidthM)
-                )
-            )
-
-            visualVertices.append(
-                Climb3DVertex(
-                    x: Float(endX + normalX * visualHalfWidthM),
-                    y: Float(b.y),
-                    z: Float(endZ + normalZ * visualHalfWidthM)
-                )
-            )
-
-            visualVertices.append(
-                Climb3DVertex(
-                    x: Float(endX - normalX * visualHalfWidthM),
-                    y: Float(b.y),
-                    z: Float(endZ - normalZ * visualHalfWidthM)
-                )
-            )
-
-            // Grade is calculated from the real elevation, not the 5x visual
-            // exaggeration. Elevation has already been smoothed by Route.
+            // Real grade, never the 5x visual exaggeration.
             let realRise =
                 (b.y - a.y) /
                 verticalExaggeration
@@ -426,9 +396,9 @@ struct Climb3DMeshBuilder {
             return filtered
         }
 
-        // Retain Build 13 protection against consecutive pathological GPS
-        // reversals. Genuine rounded hairpins remain because they consist of
-        // several moderate direction changes.
+        // Protection against consecutive pathological GPS reversals.
+        // Genuine hairpins remain because they are composed of several
+        // progressive direction changes.
         var result: [ProjectedPoint] = []
         result.reserveCapacity(filtered.count)
 
@@ -468,7 +438,7 @@ struct Climb3DMeshBuilder {
         return result.count >= 2 ? result : filtered
     }
 
-    // MARK: - STL buffered edges
+    // MARK: - Buffered edges
 
     private func buildBufferedEdges(
         _ points: [ProjectedPoint],
@@ -479,6 +449,10 @@ struct Climb3DMeshBuilder {
         right: (x: Double, z: Double)
     )] {
 
+        guard points.count >= 2 else {
+            return []
+        }
+
         var edges: [(
             left: (x: Double, z: Double),
             right: (x: Double, z: Double)
@@ -486,38 +460,40 @@ struct Climb3DMeshBuilder {
 
         edges.reserveCapacity(points.count)
 
-        var lastAngle =
-            segmentAngle(points[0], points[1])
-
         for index in points.indices {
 
-            let angle: Double
+            let incomingAngle: Double
+            let outgoingAngle: Double
 
-            if index + 1 < points.count {
-                angle =
-                    segmentAngle(
-                        points[index],
-                        points[index + 1]
-                    )
+            if index == 0 {
+                incomingAngle = segmentAngle(points[0], points[1])
+                outgoingAngle = incomingAngle
+            } else if index == points.count - 1 {
+                incomingAngle = segmentAngle(points[index - 1], points[index])
+                outgoingAngle = incomingAngle
             } else {
-                angle = lastAngle
+                incomingAngle = segmentAngle(points[index - 1], points[index])
+                outgoingAngle = segmentAngle(points[index], points[index + 1])
             }
 
             let relativeAngle =
-                normalizedAngle(angle - lastAngle)
+                normalizedAngle(outgoingAngle - incomingAngle)
 
             let jointAngle =
-                lastAngle + relativeAngle / 2
+                incomingAngle + relativeAngle / 2
+
+            let cosHalf =
+                cos(relativeAngle / 2)
 
             var joinRadius = halfWidth
-            let cosHalf = cos(relativeAngle / 2)
 
             if abs(cosHalf) > 0.0001 {
                 joinRadius = halfWidth / cosHalf
-            } else {
-                joinRadius = halfWidth * joinLimitMultiplier
             }
 
+            // Critical Build 15 protection: bounded miter.
+            // A continuous join is preserved, but it can never extend far
+            // enough to create the giant inside-hairpin spikes.
             let limit =
                 halfWidth * joinLimitMultiplier
 
@@ -526,24 +502,24 @@ struct Climb3DMeshBuilder {
 
             let point = points[index]
 
-            let leftAngle = jointAngle + .pi / 2
-            let rightAngle = jointAngle - .pi / 2
+            let leftAngle =
+                jointAngle + .pi / 2
 
-            let left = (
-                x: point.x + joinRadius * cos(leftAngle),
-                z: point.z + joinRadius * sin(leftAngle)
-            )
-
-            let right = (
-                x: point.x + joinRadius * cos(rightAngle),
-                z: point.z + joinRadius * sin(rightAngle)
-            )
+            let rightAngle =
+                jointAngle - .pi / 2
 
             edges.append(
-                (left: left, right: right)
+                (
+                    left: (
+                        x: point.x + joinRadius * cos(leftAngle),
+                        z: point.z + joinRadius * sin(leftAngle)
+                    ),
+                    right: (
+                        x: point.x + joinRadius * cos(rightAngle),
+                        z: point.z + joinRadius * sin(rightAngle)
+                    )
+                )
             )
-
-            lastAngle = angle
         }
 
         return edges
@@ -594,5 +570,4 @@ struct Climb3DMeshBuilder {
 
         return sqrt(dx * dx + dz * dz)
     }
-}
 
