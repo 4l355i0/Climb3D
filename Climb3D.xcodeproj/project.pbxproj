@@ -139,7 +139,7 @@
             buildSettings = {
                 ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
                 CODE_SIGN_STYLE = Automatic;
-                CURRENT_PROJECT_VERSION = 5;
+                CURRENT_PROJECT_VERSION = 6;
                 DEVELOPMENT_TEAM = K2FS6TGPBV;
                 GENERATE_INFOPLIST_FILE = NO;
                 INFOPLIST_FILE = Climb3D/Info.plist;
@@ -159,7 +159,7 @@
             buildSettings = {
                 ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
                 CODE_SIGN_STYLE = Automatic;
-                CURRENT_PROJECT_VERSION = 5;
+                CURRENT_PROJECT_VERSION = 6;
                 DEVELOPMENT_TEAM = K2FS6TGPBV;
                 GENERATE_INFOPLIST_FILE = NO;
                 INFOPLIST_FILE = Climb3D/Info.plist;
