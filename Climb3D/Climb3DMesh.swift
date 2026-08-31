@@ -16,76 +16,11 @@ struct Climb3DTriangle {
 
 struct Climb3DMesh {
 
-    // Terrain / mountain corridor
     let vertices: [Climb3DVertex]
     let triangles: [Climb3DTriangle]
-
-    // Route position
     let centerline: [Climb3DVertex]
 
-    // Road surface
-    let roadVertices: [Climb3DVertex]
-    let roadTriangles: [Climb3DTriangle]
-
     func sceneGeometry() -> SCNGeometry {
-
-        let geometry =
-            makeGeometry(
-                vertices: vertices,
-                triangles: triangles
-            )
-
-        let material = SCNMaterial()
-
-        material.diffuse.contents =
-            UIColor.systemGray3
-
-        material.roughness.contents = 0.88
-        material.metalness.contents = 0.0
-
-        material.lightingModel =
-            .physicallyBased
-
-        material.isDoubleSided = true
-
-        geometry.materials = [material]
-
-        return geometry
-    }
-
-    func roadGeometry() -> SCNGeometry {
-
-        let geometry =
-            makeGeometry(
-                vertices: roadVertices,
-                triangles: roadTriangles
-            )
-
-        let material = SCNMaterial()
-
-        material.diffuse.contents =
-            UIColor(
-                white: 0.27,
-                alpha: 1
-            )
-
-        material.roughness.contents = 0.72
-        material.metalness.contents = 0.0
-
-        material.lightingModel =
-            .physicallyBased
-
-        material.isDoubleSided = true
-
-        geometry.materials = [material]
-
-        return geometry
-    }
-
-    private func makeGeometry(
-        vertices: [Climb3DVertex],
-        triangles: [Climb3DTriangle]
-    ) -> SCNGeometry {
 
         let positions: [SCNVector3] =
             vertices.map {
@@ -103,22 +38,38 @@ struct Climb3DMesh {
         )
 
         for triangle in triangles {
-            indices.append(triangle.a)
-            indices.append(triangle.b)
-            indices.append(triangle.c)
+
+            indices.append(
+                triangle.a
+            )
+
+            indices.append(
+                triangle.b
+            )
+
+            indices.append(
+                triangle.c
+            )
         }
 
         var normals =
             Array(
-                repeating: SCNVector3Zero,
-                count: positions.count
+                repeating:
+                    SCNVector3Zero,
+                count:
+                    positions.count
             )
 
         for triangle in triangles {
 
-            let ia = Int(triangle.a)
-            let ib = Int(triangle.b)
-            let ic = Int(triangle.c)
+            let ia =
+                Int(triangle.a)
+
+            let ib =
+                Int(triangle.b)
+
+            let ic =
+                Int(triangle.c)
 
             guard
                 positions.indices.contains(ia),
@@ -128,9 +79,14 @@ struct Climb3DMesh {
                 continue
             }
 
-            let a = positions[ia]
-            let b = positions[ib]
-            let c = positions[ic]
+            let a =
+                positions[ia]
+
+            let b =
+                positions[ib]
+
+            let c =
+                positions[ic]
 
             let ab =
                 SCNVector3(
@@ -146,19 +102,31 @@ struct Climb3DMesh {
                     c.z - a.z
                 )
 
-            let n =
+            let normal =
                 normalize(
-                    cross(ab, ac)
+                    cross(
+                        ab,
+                        ac
+                    )
                 )
 
             normals[ia] =
-                add(normals[ia], n)
+                add(
+                    normals[ia],
+                    normal
+                )
 
             normals[ib] =
-                add(normals[ib], n)
+                add(
+                    normals[ib],
+                    normal
+                )
 
             normals[ic] =
-                add(normals[ic], n)
+                add(
+                    normals[ic],
+                    normal
+                )
         }
 
         normals =
@@ -168,12 +136,14 @@ struct Climb3DMesh {
 
         let vertexSource =
             SCNGeometrySource(
-                vertices: positions
+                vertices:
+                    positions
             )
 
         let normalSource =
             SCNGeometrySource(
-                normals: normals
+                normals:
+                    normals
             )
 
         let indexData =
@@ -183,21 +153,60 @@ struct Climb3DMesh {
 
         let element =
             SCNGeometryElement(
-                data: indexData,
-                primitiveType: .triangles,
-                primitiveCount: triangles.count,
+                data:
+                    indexData,
+                primitiveType:
+                    .triangles,
+                primitiveCount:
+                    triangles.count,
                 bytesPerIndex:
                     MemoryLayout<Int32>.size
             )
 
-        return SCNGeometry(
-            sources: [
-                vertexSource,
-                normalSource
-            ],
-            elements: [element]
-        )
+        let geometry =
+            SCNGeometry(
+                sources: [
+                    vertexSource,
+                    normalSource
+                ],
+                elements: [
+                    element
+                ]
+            )
+
+        /*
+         Main material.
+
+         Top and sides share the same geometry,
+         so lighting is what gives the sense of volume.
+        */
+
+        let material =
+            SCNMaterial()
+
+        material.diffuse.contents =
+            UIColor.systemGray2
+
+        material.roughness.contents =
+            0.78
+
+        material.metalness.contents =
+            0.0
+
+        material.lightingModel =
+            .physicallyBased
+
+        material.isDoubleSided =
+            true
+
+        geometry.materials = [
+            material
+        ]
+
+        return geometry
     }
+
+    // MARK: - Vector helpers
 
     private func cross(
         _ a: SCNVector3,
@@ -205,9 +214,14 @@ struct Climb3DMesh {
     ) -> SCNVector3 {
 
         SCNVector3(
-            a.y * b.z - a.z * b.y,
-            a.z * b.x - a.x * b.z,
-            a.x * b.y - a.y * b.x
+            a.y * b.z -
+                a.z * b.y,
+
+            a.z * b.x -
+                a.x * b.z,
+
+            a.x * b.y -
+                a.y * b.x
         )
     }
 
@@ -224,17 +238,25 @@ struct Climb3DMesh {
     }
 
     private func normalize(
-        _ v: SCNVector3
+        _ vector:
+            SCNVector3
     ) -> SCNVector3 {
 
         let length =
             sqrt(
-                v.x * v.x +
-                v.y * v.y +
-                v.z * v.z
+                vector.x *
+                    vector.x +
+                vector.y *
+                    vector.y +
+                vector.z *
+                    vector.z
             )
 
-        guard length > 0.000001 else {
+        guard
+            length >
+                0.000001
+        else {
+
             return SCNVector3(
                 0,
                 1,
@@ -243,9 +265,14 @@ struct Climb3DMesh {
         }
 
         return SCNVector3(
-            v.x / length,
-            v.y / length,
-            v.z / length
+            vector.x /
+                length,
+
+            vector.y /
+                length,
+
+            vector.z /
+                length
         )
     }
 }
