@@ -223,9 +223,8 @@ final class Climb3DGPXParser:
     private let resampleStepM:
         Double = 8.0
 
-    // 5 samples each side ≈ 40 m
-    private let horizontalSmoothRadius:
-        Int = 5
+    // Keep the horizontal GPX geometry intact.
+    // Hairpins must not be averaged across neighbouring track legs.
 
     // 6 samples each side ≈ 48 m
     private let elevationSmoothRadius:
@@ -286,14 +285,12 @@ final class Climb3DGPXParser:
         let resampled =
             resample(original)
 
-        let horizontalSmoothed =
-            smoothHorizontal(
-                resampled
-            )
-
+        // Important: do not smooth latitude/longitude with a moving
+        // average. That cuts across tight hairpins. Resampling already
+        // removes irregular point spacing while preserving the GPX path.
         let fullySmoothed =
             smoothElevation(
-                horizontalSmoothed
+                resampled
             )
 
         guard fullySmoothed.count >= 2 else {
@@ -513,120 +510,6 @@ final class Climb3DGPXParser:
                 source[
                     source.count - 1
                 ]
-            )
-        }
-
-        return result
-    }
-
-    // MARK: Horizontal smoothing
-
-    private func smoothHorizontal(
-        _ source:
-            [Climb3DRoutePoint]
-    ) -> [Climb3DRoutePoint] {
-
-        guard source.count >= 5 else {
-            return source
-        }
-
-        var result:
-            [Climb3DRoutePoint] = []
-
-        result.reserveCapacity(
-            source.count
-        )
-
-        for index in source.indices {
-
-            /*
-             Preserve start/end more strongly.
-            */
-
-            if index == 0 ||
-                index == source.count - 1 {
-
-                result.append(
-                    source[index]
-                )
-
-                continue
-            }
-
-            let start =
-                max(
-                    0,
-                    index -
-                    horizontalSmoothRadius
-                )
-
-            let end =
-                min(
-                    source.count - 1,
-                    index +
-                    horizontalSmoothRadius
-                )
-
-            var latitudeSum = 0.0
-            var longitudeSum = 0.0
-            var weightSum = 0.0
-
-            for sampleIndex in start...end {
-
-                let sampleDistance =
-                    abs(
-                        sampleIndex -
-                        index
-                    )
-
-                /*
-                 Triangular weighted smoothing.
-                 Nearby samples matter more.
-                */
-
-                let weight =
-                    Double(
-                        horizontalSmoothRadius +
-                        1 -
-                        sampleDistance
-                    )
-
-                latitudeSum +=
-                    source[
-                        sampleIndex
-                    ].latitude *
-                    weight
-
-                longitudeSum +=
-                    source[
-                        sampleIndex
-                    ].longitude *
-                    weight
-
-                weightSum +=
-                    weight
-            }
-
-            result.append(
-                Climb3DRoutePoint(
-                    latitude:
-                        latitudeSum /
-                        weightSum,
-
-                    longitude:
-                        longitudeSum /
-                        weightSum,
-
-                    elevationM:
-                        source[
-                            index
-                        ].elevationM,
-
-                    distanceM:
-                        source[
-                            index
-                        ].distanceM
-                )
             )
         }
 
