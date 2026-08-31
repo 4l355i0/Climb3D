@@ -16,26 +16,32 @@ struct Climb3DTriangle {
 
 struct Climb3DMesh {
 
-    // Solid mesh used only by STLWriter.
+    // Closed solid used only by STLWriter.
     let vertices: [Climb3DVertex]
     let triangles: [Climb3DTriangle]
 
-    // Full GPX centerline used by progress marker and follow camera.
+    // Full GPX centerline used by marker and camera.
     let centerline: [Climb3DVertex]
 
-    // Separate visual road. It intentionally contains only the top road
-    // surface: no vertical walls, no base and no STL extrusion in SceneKit.
-    // Four vertices are stored for each visual segment:
-    // start-left, start-right, end-left, end-right.
+    // Build 15 visual ribbon:
+    // two shared vertices per path point: left, right.
     let visualVertices: [Climb3DVertex]
+
+    // One grade value per segment between consecutive visual point pairs.
     let visualSegmentGrades: [Double]
 
     func sceneGeometry() -> SCNGeometry {
 
-        guard !visualVertices.isEmpty,
-              visualVertices.count >= 4,
-              visualVertices.count / 4 == visualSegmentGrades.count else {
+        guard visualVertices.count >= 4,
+              visualVertices.count % 2 == 0 else {
+            return SCNGeometry()
+        }
 
+        let pointCount =
+            visualVertices.count / 2
+
+        guard visualSegmentGrades.count ==
+                pointCount - 1 else {
             return SCNGeometry()
         }
 
@@ -44,22 +50,25 @@ struct Climb3DMesh {
                 SCNVector3($0.x, $0.y, $0.z)
             }
 
-        // Visual segment vertices are intentionally not shared. This is
-        // important on hairpins: each road leg stays a bounded rectangle
-        // and cannot generate an enormous miter/cusp across the inside turn.
+        // Shared vertices are what make the road visually continuous.
+        // Accumulate adjacent face normals so lighting also flows smoothly
+        // from one road segment into the next.
         var normals =
             Array(
-                repeating: SCNVector3(0, 1, 0),
+                repeating: SCNVector3Zero,
                 count: positions.count
             )
 
         for segment in visualSegmentGrades.indices {
 
-            let base = segment * 4
+            let left0 = segment * 2
+            let right0 = left0 + 1
+            let left1 = (segment + 1) * 2
+            let right1 = left1 + 1
 
-            let a = positions[base]
-            let b = positions[base + 1]
-            let c = positions[base + 2]
+            let a = positions[left0]
+            let b = positions[right0]
+            let c = positions[left1]
 
             let ab = SCNVector3(
                 b.x - a.x,
@@ -75,16 +84,18 @@ struct Climb3DMesh {
 
             var n = normalize(cross(ac, ab))
 
-            // Keep the top surface normal facing upward for stable lighting.
             if n.y < 0 {
                 n = SCNVector3(-n.x, -n.y, -n.z)
             }
 
-            normals[base] = n
-            normals[base + 1] = n
-            normals[base + 2] = n
-            normals[base + 3] = n
+            normals[left0] = add(normals[left0], n)
+            normals[right0] = add(normals[right0], n)
+            normals[left1] = add(normals[left1], n)
+            normals[right1] = add(normals[right1], n)
         }
+
+        normals =
+            normals.map(normalize)
 
         let vertexSource =
             SCNGeometrySource(vertices: positions)
@@ -92,27 +103,34 @@ struct Climb3DMesh {
         let normalSource =
             SCNGeometrySource(normals: normals)
 
-        // Group all road segments into a small number of grade buckets.
-        // This gives per-grade coloring without creating thousands of
-        // SceneKit materials/elements on a long GPX.
+        // Grade colouring stays exactly a rendering concern.
+        // Adjacent road segments may use different materials while still
+        // sharing the same geometric vertices, so there are no physical gaps.
         var bucketIndices: [Int: [Int32]] = [:]
 
         for segment in visualSegmentGrades.indices {
 
-            let bucket = gradeBucket(visualSegmentGrades[segment])
-            let base = Int32(segment * 4)
+            let bucket =
+                gradeBucket(
+                    visualSegmentGrades[segment]
+                )
 
-            // Upward-facing two-triangle quad.
+            let left0 = Int32(segment * 2)
+            let right0 = left0 + 1
+            let left1 = Int32((segment + 1) * 2)
+            let right1 = left1 + 1
+
             let indices: [Int32] = [
-                base, base + 2, base + 1,
-                base + 1, base + 2, base + 3
+                left0, left1, right0,
+                right0, left1, right1
             ]
 
             bucketIndices[bucket, default: []]
                 .append(contentsOf: indices)
         }
 
-        let sortedBuckets = bucketIndices.keys.sorted()
+        let sortedBuckets =
+            bucketIndices.keys.sorted()
 
         var elements: [SCNGeometryElement] = []
         var materials: [SCNMaterial] = []
@@ -141,12 +159,17 @@ struct Climb3DMesh {
                 )
 
             elements.append(element)
-            materials.append(material(forBucket: bucket))
+            materials.append(
+                material(forBucket: bucket)
+            )
         }
 
         let geometry =
             SCNGeometry(
-                sources: [vertexSource, normalSource],
+                sources: [
+                    vertexSource,
+                    normalSource
+                ],
                 elements: elements
             )
 
@@ -154,9 +177,11 @@ struct Climb3DMesh {
         return geometry
     }
 
-    // MARK: - Climb Portal-style grade palette
+    // MARK: - Grade palette
 
-    private func gradeBucket(_ grade: Double) -> Int {
+    private func gradeBucket(
+        _ grade: Double
+    ) -> Int {
 
         switch grade {
         case ..<0:
@@ -178,13 +203,15 @@ struct Climb3DMesh {
         }
     }
 
-    private func material(forBucket bucket: Int) -> SCNMaterial {
+    private func material(
+        forBucket bucket: Int
+    ) -> SCNMaterial {
 
         let color: UIColor
 
         switch bucket {
+
         case 0:
-            // Descent / negative grade.
             color = UIColor(
                 red: 0.16,
                 green: 0.58,
@@ -193,7 +220,6 @@ struct Climb3DMesh {
             )
 
         case 1:
-            // 0-3 %.
             color = UIColor(
                 red: 0.24,
                 green: 0.76,
@@ -202,7 +228,6 @@ struct Climb3DMesh {
             )
 
         case 2:
-            // 3-5 %.
             color = UIColor(
                 red: 0.93,
                 green: 0.78,
@@ -211,7 +236,6 @@ struct Climb3DMesh {
             )
 
         case 3:
-            // 5-7 %.
             color = UIColor(
                 red: 0.98,
                 green: 0.53,
@@ -220,7 +244,6 @@ struct Climb3DMesh {
             )
 
         case 4:
-            // 7-9 %.
             color = UIColor(
                 red: 0.95,
                 green: 0.32,
@@ -229,7 +252,6 @@ struct Climb3DMesh {
             )
 
         case 5:
-            // 9-12 %.
             color = UIColor(
                 red: 0.88,
                 green: 0.12,
@@ -238,7 +260,6 @@ struct Climb3DMesh {
             )
 
         case 6:
-            // 12-15 %.
             color = UIColor(
                 red: 0.72,
                 green: 0.08,
@@ -247,7 +268,6 @@ struct Climb3DMesh {
             )
 
         default:
-            // 15 %+.
             color = UIColor(
                 red: 0.50,
                 green: 0.07,
@@ -258,7 +278,8 @@ struct Climb3DMesh {
 
         let material = SCNMaterial()
         material.diffuse.contents = color
-        material.emission.contents = color.withAlphaComponent(0.035)
+        material.emission.contents =
+            color.withAlphaComponent(0.035)
         material.roughness.contents = 0.90
         material.metalness.contents = 0.0
         material.lightingModel = .physicallyBased
@@ -278,6 +299,18 @@ struct Climb3DMesh {
             a.y * b.z - a.z * b.y,
             a.z * b.x - a.x * b.z,
             a.x * b.y - a.y * b.x
+        )
+    }
+
+    private func add(
+        _ a: SCNVector3,
+        _ b: SCNVector3
+    ) -> SCNVector3 {
+
+        SCNVector3(
+            a.x + b.x,
+            a.y + b.y,
+            a.z + b.z
         )
     }
 
