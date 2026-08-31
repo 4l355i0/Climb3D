@@ -13,65 +13,39 @@ struct Climb3DRoute {
     let totalDistanceM: Double
 
     func point(at progress: Double) -> Climb3DRoutePoint? {
-        guard !points.isEmpty else {
-            return nil
-        }
+        guard !points.isEmpty else { return nil }
 
-        if points.count == 1 {
-            return points[0]
-        }
+        let p = min(1, max(0, progress))
+        let target = p * totalDistanceM
 
-        let clampedProgress =
-            min(
-                1,
-                max(
-                    0,
-                    progress
-                )
-            )
-
-        let targetDistance =
-            clampedProgress *
-            totalDistanceM
-
-        return point(atDistanceM: targetDistance)
+        return point(atDistanceM: target)
     }
 
     func point(atDistanceM distanceM: Double) -> Climb3DRoutePoint? {
-        guard !points.isEmpty else {
-            return nil
-        }
+        guard !points.isEmpty else { return nil }
 
         if points.count == 1 {
             return points[0]
         }
 
-        let target =
-            min(
-                totalDistanceM,
-                max(
-                    0,
-                    distanceM
-                )
-            )
+        let target = min(
+            totalDistanceM,
+            max(0, distanceM)
+        )
 
         if target <= 0 {
             return points[0]
         }
 
         if target >= totalDistanceM {
-            return points[
-                points.count - 1
-            ]
+            return points[points.count - 1]
         }
 
         var low = 0
-        var high =
-            points.count - 1
+        var high = points.count - 1
 
         while low + 1 < high {
-            let mid =
-                (low + high) / 2
+            let mid = (low + high) / 2
 
             if points[mid].distanceM < target {
                 low = mid
@@ -83,117 +57,84 @@ struct Climb3DRoute {
         let a = points[low]
         let b = points[high]
 
-        let span =
-            max(
-                0.001,
-                b.distanceM -
-                a.distanceM
-            )
+        let span = max(
+            0.001,
+            b.distanceM - a.distanceM
+        )
 
         let t =
-            (target -
-             a.distanceM) /
+            (target - a.distanceM) /
             span
 
         return Climb3DRoutePoint(
             latitude:
                 a.latitude +
-                (
-                    b.latitude -
-                    a.latitude
-                ) *
-                t,
+                (b.latitude - a.latitude) * t,
 
             longitude:
                 a.longitude +
-                (
-                    b.longitude -
-                    a.longitude
-                ) *
-                t,
+                (b.longitude - a.longitude) * t,
 
             elevationM:
                 a.elevationM +
-                (
-                    b.elevationM -
-                    a.elevationM
-                ) *
-                t,
+                (b.elevationM - a.elevationM) * t,
 
             distanceM:
                 target
         )
     }
 
-    func elevation(
-        at progress: Double
-    ) -> Double {
-
-        point(
-            at: progress
-        )?
-        .elevationM ?? 0
-    }
-
-    func distance(
-        at progress: Double
-    ) -> Double {
-
-        min(
-            1,
-            max(
-                0,
-                progress
-            )
-        ) *
+    func distance(at progress: Double) -> Double {
+        min(1, max(0, progress)) *
         totalDistanceM
     }
 
-    func remainingDistance(
-        at progress: Double
-    ) -> Double {
-
+    func remainingDistance(at progress: Double) -> Double {
         max(
             0,
             totalDistanceM -
-            distance(
-                at: progress
-            )
+            distance(at: progress)
         )
     }
 
+    func elevation(at progress: Double) -> Double {
+        point(at: progress)?.elevationM ?? 0
+    }
+
+    /*
+     Stable displayed gradient.
+
+     Uses approximately 100 m around the current
+     position instead of the old 20 m window.
+    */
     func gradePercent(
         at progress: Double,
-        windowM: Double = 20
+        windowM: Double = 100
     ) -> Double {
 
-        guard totalDistanceM > 0 else {
+        guard totalDistanceM > 1 else {
             return 0
         }
 
-        let centerDistance =
-            distance(
-                at: progress
-            )
+        let center =
+            distance(at: progress)
 
-        let halfWindow =
+        let half =
             max(
-                2,
+                20,
                 windowM / 2
             )
 
         let beforeDistance =
             max(
                 0,
-                centerDistance -
-                halfWindow
+                center - half
             )
 
         let afterDistance =
             min(
                 totalDistanceM,
-                centerDistance +
-                halfWindow
+                center + half
             )
 
         guard
@@ -211,33 +152,36 @@ struct Climb3DRoute {
             return 0
         }
 
-        let horizontalDistance =
+        let run =
             after.distanceM -
             before.distanceM
 
-        guard horizontalDistance > 0.5
-        else {
+        guard run > 5 else {
             return 0
         }
 
-        let elevationDifference =
+        let rise =
             after.elevationM -
             before.elevationM
 
         return
-            elevationDifference /
-            horizontalDistance *
+            rise /
+            run *
             100
     }
 }
 
 
-// MARK: - GPX Parser
+// MARK: - GPX parser
 
 final class Climb3DGPXParser:
     NSObject,
     XMLParserDelegate {
 
+    /*
+     We first parse the raw GPX.
+     Then we convert it to a cleaned route.
+    */
     private var raw:
         [
             (
@@ -252,9 +196,26 @@ final class Climb3DGPXParser:
     private var currentEle: Double?
     private var currentText = ""
 
-    func parse(
-        url: URL
-    ) throws -> Climb3DRoute {
+    // MARK: Configuration
+
+    /*
+     Regular spacing of the processed route.
+
+     8 m is detailed enough for hairpins,
+     while avoiding thousands of irregular points.
+    */
+    private let resampleStepM:
+        Double = 8.0
+
+    /*
+     Approximate smoothing radius.
+
+     5 samples x 8 m ≈ 40 m.
+    */
+    private let elevationSmoothRadius:
+        Int = 5
+
+    func parse(url: URL) throws -> Climb3DRoute {
 
         let data =
             try Data(
@@ -299,6 +260,45 @@ final class Climb3DGPXParser:
             )
         }
 
+        let original =
+            buildOriginalRoute()
+
+        let resampled =
+            resample(
+                original
+            )
+
+        let smoothed =
+            smoothElevation(
+                resampled
+            )
+
+        guard smoothed.count >= 2 else {
+            throw NSError(
+                domain:
+                    "Climb3D.GPX",
+                code:
+                    3,
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "Unable to process GPX"
+                ]
+            )
+        }
+
+        return Climb3DRoute(
+            points:
+                smoothed,
+            totalDistanceM:
+                smoothed.last?.distanceM ?? 0
+        )
+    }
+
+    // MARK: - Original route
+
+    private func buildOriginalRoute()
+        -> [Climb3DRoutePoint] {
+
         var result:
             [Climb3DRoutePoint] = []
 
@@ -312,14 +312,14 @@ final class Climb3DGPXParser:
         var previous:
             CLLocation?
 
-        for p in raw {
+        for point in raw {
 
             let location =
                 CLLocation(
                     latitude:
-                        p.lat,
+                        point.lat,
                     longitude:
-                        p.lon
+                        point.lon
                 )
 
             if let previous {
@@ -333,11 +333,11 @@ final class Climb3DGPXParser:
             result.append(
                 Climb3DRoutePoint(
                     latitude:
-                        p.lat,
+                        point.lat,
                     longitude:
-                        p.lon,
+                        point.lon,
                     elevationM:
-                        p.ele,
+                        point.ele,
                     distanceM:
                         cumulative
                 )
@@ -347,13 +347,248 @@ final class Climb3DGPXParser:
                 location
         }
 
-        return Climb3DRoute(
-            points:
-                result,
-            totalDistanceM:
-                cumulative
-        )
+        return result
     }
+
+    // MARK: - Resampling
+
+    private func resample(
+        _ source:
+            [Climb3DRoutePoint]
+    ) -> [Climb3DRoutePoint] {
+
+        guard
+            source.count >= 2,
+            let last =
+                source.last,
+            last.distanceM > 0
+        else {
+            return source
+        }
+
+        let total =
+            last.distanceM
+
+        var result:
+            [Climb3DRoutePoint] = []
+
+        result.reserveCapacity(
+            Int(
+                total /
+                resampleStepM
+            ) + 2
+        )
+
+        var target =
+            0.0
+
+        var segmentIndex =
+            0
+
+        while target <= total {
+
+            while
+                segmentIndex + 1 <
+                    source.count,
+                source[
+                    segmentIndex + 1
+                ].distanceM <
+                    target {
+
+                segmentIndex += 1
+            }
+
+            let nextIndex =
+                min(
+                    source.count - 1,
+                    segmentIndex + 1
+                )
+
+            let a =
+                source[
+                    segmentIndex
+                ]
+
+            let b =
+                source[
+                    nextIndex
+                ]
+
+            let span =
+                max(
+                    0.001,
+                    b.distanceM -
+                    a.distanceM
+                )
+
+            let t =
+                min(
+                    1,
+                    max(
+                        0,
+                        (target -
+                         a.distanceM) /
+                        span
+                    )
+                )
+
+            result.append(
+                Climb3DRoutePoint(
+                    latitude:
+                        a.latitude +
+                        (
+                            b.latitude -
+                            a.latitude
+                        ) * t,
+
+                    longitude:
+                        a.longitude +
+                        (
+                            b.longitude -
+                            a.longitude
+                        ) * t,
+
+                    elevationM:
+                        a.elevationM +
+                        (
+                            b.elevationM -
+                            a.elevationM
+                        ) * t,
+
+                    distanceM:
+                        target
+                )
+            )
+
+            target +=
+                resampleStepM
+        }
+
+        /*
+         Make sure the exact final point exists.
+        */
+        if let lastResult =
+                result.last,
+           total -
+                lastResult.distanceM >
+                0.1 {
+
+            result.append(
+                source[
+                    source.count - 1
+                ]
+            )
+        }
+
+        return result
+    }
+
+    // MARK: - Elevation smoothing
+
+    private func smoothElevation(
+        _ source:
+            [Climb3DRoutePoint]
+    ) -> [Climb3DRoutePoint] {
+
+        guard source.count >= 3 else {
+            return source
+        }
+
+        var result:
+            [Climb3DRoutePoint] = []
+
+        result.reserveCapacity(
+            source.count
+        )
+
+        for index in source.indices {
+
+            let start =
+                max(
+                    0,
+                    index -
+                    elevationSmoothRadius
+                )
+
+            let end =
+                min(
+                    source.count - 1,
+                    index +
+                    elevationSmoothRadius
+                )
+
+            /*
+             Weighted triangular moving average.
+
+             Central samples have more weight
+             than samples at the edge.
+            */
+            var elevationSum =
+                0.0
+
+            var weightSum =
+                0.0
+
+            for sampleIndex in start...end {
+
+                let distance =
+                    abs(
+                        sampleIndex -
+                        index
+                    )
+
+                let weight =
+                    Double(
+                        elevationSmoothRadius +
+                        1 -
+                        distance
+                    )
+
+                elevationSum +=
+                    source[
+                        sampleIndex
+                    ].elevationM *
+                    weight
+
+                weightSum +=
+                    weight
+            }
+
+            let smoothedElevation =
+                weightSum > 0
+                ? elevationSum /
+                  weightSum
+                : source[
+                    index
+                ].elevationM
+
+            result.append(
+                Climb3DRoutePoint(
+                    latitude:
+                        source[
+                            index
+                        ].latitude,
+
+                    longitude:
+                        source[
+                            index
+                        ].longitude,
+
+                    elevationM:
+                        smoothedElevation,
+
+                    distanceM:
+                        source[
+                            index
+                        ].distanceM
+                )
+            )
+        }
+
+        return result
+    }
+
+    // MARK: - XML parser
 
     func parser(
         _ parser: XMLParser,
@@ -391,7 +626,8 @@ final class Climb3DGPXParser:
         _ parser: XMLParser,
         foundCharacters string: String
     ) {
-        currentText += string
+        currentText +=
+            string
     }
 
     func parser(
@@ -416,9 +652,10 @@ final class Climb3DGPXParser:
         if elementName == "trkpt" ||
             elementName == "rtept" {
 
-            if let lat =
+            if
+                let lat =
                     currentLat,
-               let lon =
+                let lon =
                     currentLon {
 
                 raw.append(
