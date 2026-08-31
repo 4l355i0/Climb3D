@@ -15,21 +15,89 @@ struct Climb3DTriangle {
 }
 
 struct Climb3DMesh {
+
+    // Terrain / mountain corridor
     let vertices: [Climb3DVertex]
     let triangles: [Climb3DTriangle]
+
+    // Route position
     let centerline: [Climb3DVertex]
+
+    // Road surface
+    let roadVertices: [Climb3DVertex]
+    let roadTriangles: [Climb3DTriangle]
 
     func sceneGeometry() -> SCNGeometry {
 
-        let positions: [SCNVector3] = vertices.map {
-            SCNVector3(
-                $0.x,
-                $0.y,
-                $0.z
+        let geometry =
+            makeGeometry(
+                vertices: vertices,
+                triangles: triangles
             )
-        }
+
+        let material = SCNMaterial()
+
+        material.diffuse.contents =
+            UIColor.systemGray3
+
+        material.roughness.contents = 0.88
+        material.metalness.contents = 0.0
+
+        material.lightingModel =
+            .physicallyBased
+
+        material.isDoubleSided = true
+
+        geometry.materials = [material]
+
+        return geometry
+    }
+
+    func roadGeometry() -> SCNGeometry {
+
+        let geometry =
+            makeGeometry(
+                vertices: roadVertices,
+                triangles: roadTriangles
+            )
+
+        let material = SCNMaterial()
+
+        material.diffuse.contents =
+            UIColor(
+                white: 0.27,
+                alpha: 1
+            )
+
+        material.roughness.contents = 0.72
+        material.metalness.contents = 0.0
+
+        material.lightingModel =
+            .physicallyBased
+
+        material.isDoubleSided = true
+
+        geometry.materials = [material]
+
+        return geometry
+    }
+
+    private func makeGeometry(
+        vertices: [Climb3DVertex],
+        triangles: [Climb3DTriangle]
+    ) -> SCNGeometry {
+
+        let positions: [SCNVector3] =
+            vertices.map {
+                SCNVector3(
+                    $0.x,
+                    $0.y,
+                    $0.z
+                )
+            }
 
         var indices: [Int32] = []
+
         indices.reserveCapacity(
             triangles.count * 3
         )
@@ -40,12 +108,11 @@ struct Climb3DMesh {
             indices.append(triangle.c)
         }
 
-        // MARK: - Vertex normals
-
-        var normals = Array(
-            repeating: SCNVector3Zero,
-            count: positions.count
-        )
+        var normals =
+            Array(
+                repeating: SCNVector3Zero,
+                count: positions.count
+            )
 
         for triangle in triangles {
 
@@ -65,46 +132,39 @@ struct Climb3DMesh {
             let b = positions[ib]
             let c = positions[ic]
 
-            let ab = SCNVector3(
-                b.x - a.x,
-                b.y - a.y,
-                b.z - a.z
-            )
-
-            let ac = SCNVector3(
-                c.x - a.x,
-                c.y - a.y,
-                c.z - a.z
-            )
-
-            let normal = normalize(
-                cross(
-                    ab,
-                    ac
+            let ab =
+                SCNVector3(
+                    b.x - a.x,
+                    b.y - a.y,
+                    b.z - a.z
                 )
-            )
 
-            normals[ia] = add(
-                normals[ia],
-                normal
-            )
+            let ac =
+                SCNVector3(
+                    c.x - a.x,
+                    c.y - a.y,
+                    c.z - a.z
+                )
 
-            normals[ib] = add(
-                normals[ib],
-                normal
-            )
+            let n =
+                normalize(
+                    cross(ab, ac)
+                )
 
-            normals[ic] = add(
-                normals[ic],
-                normal
-            )
+            normals[ia] =
+                add(normals[ia], n)
+
+            normals[ib] =
+                add(normals[ib], n)
+
+            normals[ic] =
+                add(normals[ic], n)
         }
 
-        normals = normals.map {
-            normalize($0)
-        }
-
-        // MARK: - Geometry sources
+        normals =
+            normals.map {
+                normalize($0)
+            }
 
         let vertexSource =
             SCNGeometrySource(
@@ -130,43 +190,14 @@ struct Climb3DMesh {
                     MemoryLayout<Int32>.size
             )
 
-        let geometry =
-            SCNGeometry(
-                sources: [
-                    vertexSource,
-                    normalSource
-                ],
-                elements: [
-                    element
-                ]
-            )
-
-        // MARK: - Material
-
-        let material = SCNMaterial()
-
-        material.diffuse.contents =
-            UIColor.systemGray2
-
-        material.roughness.contents =
-            0.72
-
-        material.metalness.contents =
-            0.0
-
-        material.lightingModel =
-            .physicallyBased
-
-        material.isDoubleSided = true
-
-        geometry.materials = [
-            material
-        ]
-
-        return geometry
+        return SCNGeometry(
+            sources: [
+                vertexSource,
+                normalSource
+            ],
+            elements: [element]
+        )
     }
-
-    // MARK: - Vector helpers
 
     private func cross(
         _ a: SCNVector3,
@@ -174,14 +205,9 @@ struct Climb3DMesh {
     ) -> SCNVector3 {
 
         SCNVector3(
-            a.y * b.z -
-            a.z * b.y,
-
-            a.z * b.x -
-            a.x * b.z,
-
-            a.x * b.y -
-            a.y * b.x
+            a.y * b.z - a.z * b.y,
+            a.z * b.x - a.x * b.z,
+            a.x * b.y - a.y * b.x
         )
     }
 
@@ -198,18 +224,17 @@ struct Climb3DMesh {
     }
 
     private func normalize(
-        _ vector: SCNVector3
+        _ v: SCNVector3
     ) -> SCNVector3 {
 
         let length =
             sqrt(
-                vector.x * vector.x +
-                vector.y * vector.y +
-                vector.z * vector.z
+                v.x * v.x +
+                v.y * v.y +
+                v.z * v.z
             )
 
-        guard length > 0.000001
-        else {
+        guard length > 0.000001 else {
             return SCNVector3(
                 0,
                 1,
@@ -218,9 +243,9 @@ struct Climb3DMesh {
         }
 
         return SCNVector3(
-            vector.x / length,
-            vector.y / length,
-            vector.z / length
+            v.x / length,
+            v.y / length,
+            v.z / length
         )
     }
 }
