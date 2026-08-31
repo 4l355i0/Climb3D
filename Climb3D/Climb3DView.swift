@@ -24,16 +24,11 @@ struct Climb3DView: UIViewRepresentable {
         view.backgroundColor =
             .systemBackground
 
-        /*
-         We manage gestures ourselves.
-        */
         view.allowsCameraControl = false
-
         view.autoenablesDefaultLighting = false
         view.antialiasingMode = .multisampling4X
         view.isPlaying = true
 
-        // One finger = orbit
         let pan =
             UIPanGestureRecognizer(
                 target: context.coordinator,
@@ -49,7 +44,6 @@ struct Climb3DView: UIViewRepresentable {
             pan
         )
 
-        // Pinch = zoom
         let pinch =
             UIPinchGestureRecognizer(
                 target: context.coordinator,
@@ -63,10 +57,6 @@ struct Climb3DView: UIViewRepresentable {
             pinch
         )
 
-        /*
-         Double tap = centre / zoom on rider.
-         Reset button remains the full-route view.
-        */
         let doubleTap =
             UITapGestureRecognizer(
                 target: context.coordinator,
@@ -115,13 +105,22 @@ struct Climb3DView: UIViewRepresentable {
         let sceneController:
             Climb3DSceneController
 
+        private var lastPanTranslation =
+            CGPoint.zero
+
+        private var lastPinchScale:
+            CGFloat = 1
+
         init(
             sceneController:
                 Climb3DSceneController
         ) {
+
             self.sceneController =
                 sceneController
         }
+
+        // MARK: - Pan
 
         @objc
         func handlePan(
@@ -134,21 +133,44 @@ struct Climb3DView: UIViewRepresentable {
                     in: gesture.view
                 )
 
-            Task { @MainActor in
+            switch gesture.state {
 
-                sceneController.orbit(
-                    deltaX:
-                        translation.x,
-                    deltaY:
-                        translation.y
-                )
+            case .began:
+
+                lastPanTranslation =
+                    translation
+
+                Task { @MainActor in
+                    sceneController
+                        .disableFollowMode()
+                }
+
+            case .changed:
+
+                /*
+                 Manual camera interaction is currently
+                 disabled once Follow is released.
+
+                 We leave the camera where it is instead
+                 of fighting with the automatic controller.
+                */
+
+                lastPanTranslation =
+                    translation
+
+            case .ended,
+                 .cancelled,
+                 .failed:
+
+                lastPanTranslation =
+                    .zero
+
+            default:
+                break
             }
-
-            gesture.setTranslation(
-                .zero,
-                in: gesture.view
-            )
         }
+
+        // MARK: - Pinch
 
         @objc
         func handlePinch(
@@ -156,22 +178,41 @@ struct Climb3DView: UIViewRepresentable {
                 UIPinchGestureRecognizer
         ) {
 
-            let scale =
-                gesture.scale
+            switch gesture.state {
 
-            guard scale > 0 else {
-                return
+            case .began:
+
+                lastPinchScale =
+                    gesture.scale
+
+                Task { @MainActor in
+                    sceneController
+                        .disableFollowMode()
+                }
+
+            case .changed:
+
+                /*
+                 Follow mode is paused.
+                 We don't alter the follow camera here.
+                 Manual zoom can be added separately later.
+                */
+
+                lastPinchScale =
+                    gesture.scale
+
+            case .ended,
+                 .cancelled,
+                 .failed:
+
+                lastPinchScale = 1
+
+            default:
+                break
             }
-
-            Task { @MainActor in
-
-                sceneController.zoom(
-                    scale: scale
-                )
-            }
-
-            gesture.scale = 1
         }
+
+        // MARK: - Double tap
 
         @objc
         func handleDoubleTap(
@@ -182,7 +223,7 @@ struct Climb3DView: UIViewRepresentable {
             Task { @MainActor in
 
                 sceneController
-                    .focusOnMarker()
+                    .enableFollowMode()
             }
         }
     }
