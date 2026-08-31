@@ -15,213 +15,96 @@ struct Climb3DTriangle {
 }
 
 struct Climb3DMesh {
-
     let vertices: [Climb3DVertex]
     let triangles: [Climb3DTriangle]
     let centerline: [Climb3DVertex]
 
     func sceneGeometry() -> SCNGeometry {
-
-        let positions: [SCNVector3] =
-            vertices.map {
-                SCNVector3(
-                    $0.x,
-                    $0.y,
-                    $0.z
-                )
-            }
-
+        let positions = vertices.map { SCNVector3($0.x, $0.y, $0.z) }
         var indices: [Int32] = []
+        indices.reserveCapacity(triangles.count * 3)
 
-        indices.reserveCapacity(
-            triangles.count * 3
-        )
-
-        for triangle in triangles {
-
-            indices.append(
-                triangle.a
-            )
-
-            indices.append(
-                triangle.b
-            )
-
-            indices.append(
-                triangle.c
-            )
+        for t in triangles {
+            indices += [t.a, t.b, t.c]
         }
 
-        var normals =
-            Array(
-                repeating:
-                    SCNVector3Zero,
-                count:
-                    positions.count
-            )
+        var normals = Array(repeating: SCNVector3Zero, count: positions.count)
 
         for triangle in triangles {
+            let ia = Int(triangle.a)
+            let ib = Int(triangle.b)
+            let ic = Int(triangle.c)
 
-            let ia =
-                Int(triangle.a)
-
-            let ib =
-                Int(triangle.b)
-
-            let ic =
-                Int(triangle.c)
-
-            guard
-                positions.indices.contains(ia),
-                positions.indices.contains(ib),
-                positions.indices.contains(ic)
-            else {
+            guard positions.indices.contains(ia),
+                  positions.indices.contains(ib),
+                  positions.indices.contains(ic) else {
                 continue
             }
 
-            let a =
-                positions[ia]
+            let a = positions[ia]
+            let b = positions[ib]
+            let c = positions[ic]
 
-            let b =
-                positions[ib]
+            let ab = SCNVector3(
+                b.x - a.x,
+                b.y - a.y,
+                b.z - a.z
+            )
 
-            let c =
-                positions[ic]
+            let ac = SCNVector3(
+                c.x - a.x,
+                c.y - a.y,
+                c.z - a.z
+            )
 
-            let ab =
-                SCNVector3(
-                    b.x - a.x,
-                    b.y - a.y,
-                    b.z - a.z
-                )
+            let n = normalize(cross(ab, ac))
 
-            let ac =
-                SCNVector3(
-                    c.x - a.x,
-                    c.y - a.y,
-                    c.z - a.z
-                )
-
-            let normal =
-                normalize(
-                    cross(
-                        ab,
-                        ac
-                    )
-                )
-
-            normals[ia] =
-                add(
-                    normals[ia],
-                    normal
-                )
-
-            normals[ib] =
-                add(
-                    normals[ib],
-                    normal
-                )
-
-            normals[ic] =
-                add(
-                    normals[ic],
-                    normal
-                )
+            normals[ia] = add(normals[ia], n)
+            normals[ib] = add(normals[ib], n)
+            normals[ic] = add(normals[ic], n)
         }
 
-        normals =
-            normals.map {
-                normalize($0)
-            }
+        normals = normals.map(normalize)
 
-        let vertexSource =
-            SCNGeometrySource(
-                vertices:
-                    positions
-            )
+        let vertexSource = SCNGeometrySource(vertices: positions)
+        let normalSource = SCNGeometrySource(normals: normals)
 
-        let normalSource =
-            SCNGeometrySource(
-                normals:
-                    normals
-            )
+        let indexData = indices.withUnsafeBytes {
+            Data($0)
+        }
 
-        let indexData =
-            indices.withUnsafeBytes {
-                Data($0)
-            }
+        let element = SCNGeometryElement(
+            data: indexData,
+            primitiveType: .triangles,
+            primitiveCount: triangles.count,
+            bytesPerIndex: MemoryLayout<Int32>.size
+        )
 
-        let element =
-            SCNGeometryElement(
-                data:
-                    indexData,
-                primitiveType:
-                    .triangles,
-                primitiveCount:
-                    triangles.count,
-                bytesPerIndex:
-                    MemoryLayout<Int32>.size
-            )
+        let geometry = SCNGeometry(
+            sources: [vertexSource, normalSource],
+            elements: [element]
+        )
 
-        let geometry =
-            SCNGeometry(
-                sources: [
-                    vertexSource,
-                    normalSource
-                ],
-                elements: [
-                    element
-                ]
-            )
+        let material = SCNMaterial()
+        material.diffuse.contents = UIColor.systemGray2
+        material.roughness.contents = 0.82
+        material.metalness.contents = 0.0
+        material.lightingModel = .physicallyBased
+        material.isDoubleSided = true
 
-        /*
-         Main material.
-
-         Top and sides share the same geometry,
-         so lighting is what gives the sense of volume.
-        */
-
-        let material =
-            SCNMaterial()
-
-        material.diffuse.contents =
-            UIColor.systemGray2
-
-        material.roughness.contents =
-            0.78
-
-        material.metalness.contents =
-            0.0
-
-        material.lightingModel =
-            .physicallyBased
-
-        material.isDoubleSided =
-            true
-
-        geometry.materials = [
-            material
-        ]
+        geometry.materials = [material]
 
         return geometry
     }
-
-    // MARK: - Vector helpers
 
     private func cross(
         _ a: SCNVector3,
         _ b: SCNVector3
     ) -> SCNVector3 {
-
         SCNVector3(
-            a.y * b.z -
-                a.z * b.y,
-
-            a.z * b.x -
-                a.x * b.z,
-
-            a.x * b.y -
-                a.y * b.x
+            a.y * b.z - a.z * b.y,
+            a.z * b.x - a.x * b.z,
+            a.x * b.y - a.y * b.x
         )
     }
 
@@ -229,7 +112,6 @@ struct Climb3DMesh {
         _ a: SCNVector3,
         _ b: SCNVector3
     ) -> SCNVector3 {
-
         SCNVector3(
             a.x + b.x,
             a.y + b.y,
@@ -238,41 +120,22 @@ struct Climb3DMesh {
     }
 
     private func normalize(
-        _ vector:
-            SCNVector3
+        _ v: SCNVector3
     ) -> SCNVector3 {
+        let l = sqrt(
+            v.x * v.x +
+            v.y * v.y +
+            v.z * v.z
+        )
 
-        let length =
-            sqrt(
-                vector.x *
-                    vector.x +
-                vector.y *
-                    vector.y +
-                vector.z *
-                    vector.z
-            )
-
-        guard
-            length >
-                0.000001
-        else {
-
-            return SCNVector3(
-                0,
-                1,
-                0
-            )
+        guard l > 0.000001 else {
+            return SCNVector3(0, 1, 0)
         }
 
         return SCNVector3(
-            vector.x /
-                length,
-
-            vector.y /
-                length,
-
-            vector.z /
-                length
+            v.x / l,
+            v.y / l,
+            v.z / l
         )
     }
 }
