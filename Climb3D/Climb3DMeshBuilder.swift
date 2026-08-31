@@ -5,16 +5,35 @@ struct Climb3DMeshBuilder {
     /*
      VISUAL MODEL ONLY
 
-     RideClimb physics remain authoritative.
+     RideClimb remains authoritative for:
+     - physical gradient
+     - trainer resistance
+     - distance/progress
     */
 
+    // Visible road width = 10 m
     let roadHalfWidthM: Double = 5.0
 
-    // Local block thickness under the road.
-    let roadThicknessM: Double = 10.0
+    /*
+     Base width = 36 m.
 
-    // Deliberately exaggerated for visual perception.
-    let verticalExaggeration: Double = 2.2
+     The lower part is deliberately wider than
+     the road, creating a connected pedestal /
+     terrain reference without producing the
+     huge intersecting surfaces of the previous
+     terrain implementation.
+    */
+    let baseHalfWidthM: Double = 18.0
+
+    // Local depth below the road.
+    let baseDepthM: Double = 12.0
+
+    /*
+     Visual exaggeration only.
+     Higher than reality on purpose to make
+     climbing immediately readable.
+    */
+    let verticalExaggeration: Double = 2.4
 
     let roadLiftM: Double = 0.8
     let centerlineLiftM: Double = 1.5
@@ -51,6 +70,13 @@ struct Climb3DMeshBuilder {
                 .map(\.elevationM)
                 .min() ?? 0
 
+        /*
+         Coordinate system:
+
+         X = east / west
+         Y = elevation
+         Z = north / south
+        */
         let points:
             [
                 (
@@ -90,18 +116,21 @@ struct Climb3DMeshBuilder {
             }
 
         /*
-         Four vertices per route point:
+         Cross-section:
 
-         top-left
-         top-right
-         bottom-left
-         bottom-right
+                   ROAD
+              ┌──────────┐
+             /            \
+            /              \
+           └────────────────┘
+                 BASE
 
-         The bottom follows the local elevation:
-         topY - roadThicknessM.
+         top-left / top-right
+         bottom-left / bottom-right
 
-         This gives volume without building huge
-         terrain sheets around the route.
+         The bottom follows the local road elevation,
+         therefore we never create a wall extending
+         down to a global zero plane.
         */
 
         var vertices:
@@ -179,6 +208,9 @@ struct Climb3DMeshBuilder {
                 length = 1
             }
 
+            /*
+             Horizontal normal to the route.
+            */
             let nx =
                 -dz /
                 length
@@ -187,67 +219,91 @@ struct Climb3DMeshBuilder {
                 dx /
                 length
 
-            let leftX =
+            // MARK: Road top
+
+            let topLeftX =
                 point.x +
                 nx *
                 roadHalfWidthM
 
-            let leftZ =
+            let topLeftZ =
                 point.z +
                 nz *
                 roadHalfWidthM
 
-            let rightX =
+            let topRightX =
                 point.x -
                 nx *
                 roadHalfWidthM
 
-            let rightZ =
+            let topRightZ =
                 point.z -
                 nz *
                 roadHalfWidthM
+
+            // MARK: Wider base
+
+            let bottomLeftX =
+                point.x +
+                nx *
+                baseHalfWidthM
+
+            let bottomLeftZ =
+                point.z +
+                nz *
+                baseHalfWidthM
+
+            let bottomRightX =
+                point.x -
+                nx *
+                baseHalfWidthM
+
+            let bottomRightZ =
+                point.z -
+                nz *
+                baseHalfWidthM
 
             let topY =
                 point.y +
                 roadLiftM
 
             let bottomY =
-                topY -
-                roadThicknessM
+                point.y -
+                baseDepthM
 
             // Top left
             vertices.append(
                 Climb3DVertex(
-                    x: Float(leftX),
+                    x: Float(topLeftX),
                     y: Float(topY),
-                    z: Float(leftZ)
+                    z: Float(topLeftZ)
                 )
             )
 
             // Top right
             vertices.append(
                 Climb3DVertex(
-                    x: Float(rightX),
+                    x: Float(topRightX),
                     y: Float(topY),
-                    z: Float(rightZ)
+                    z: Float(topRightZ)
                 )
             )
 
             // Bottom left
             vertices.append(
                 Climb3DVertex(
-                    x: Float(leftX),
+                    x: Float(bottomLeftX),
                     y: Float(bottomY),
-                    z: Float(leftZ)
+                    z: Float(bottomLeftZ)
                 )
             )
 
             // Bottom right
             vertices.append(
                 Climb3DVertex(
-                    x: Float(rightX),
+                    x: Float(bottomRightX),
                     y: Float(bottomY),
-                    z: Float(rightZ)
+                    z: Float(bottomRightZ)
                 )
             )
 
@@ -280,7 +336,9 @@ struct Climb3DMeshBuilder {
         for index in
             0..<(points.count - 1) {
 
-            // TOP
+            /*
+             TOP ROAD
+            */
             triangles.append(
                 Climb3DTriangle(
                     a: idx(index, 0),
@@ -297,7 +355,9 @@ struct Climb3DMeshBuilder {
                 )
             )
 
-            // LEFT SIDE
+            /*
+             LEFT SLOPED SIDE
+            */
             triangles.append(
                 Climb3DTriangle(
                     a: idx(index, 2),
@@ -314,7 +374,9 @@ struct Climb3DMeshBuilder {
                 )
             )
 
-            // RIGHT SIDE
+            /*
+             RIGHT SLOPED SIDE
+            */
             triangles.append(
                 Climb3DTriangle(
                     a: idx(index, 1),
@@ -331,7 +393,9 @@ struct Climb3DMeshBuilder {
                 )
             )
 
-            // BOTTOM
+            /*
+             BOTTOM BASE
+            */
             triangles.append(
                 Climb3DTriangle(
                     a: idx(index, 2),
@@ -349,7 +413,9 @@ struct Climb3DMeshBuilder {
             )
         }
 
-        // Front cap
+        /*
+         Front cap
+        */
         triangles.append(
             Climb3DTriangle(
                 a: idx(0, 2),
@@ -369,7 +435,9 @@ struct Climb3DMeshBuilder {
         let last =
             points.count - 1
 
-        // Rear cap
+        /*
+         Rear cap
+        */
         triangles.append(
             Climb3DTriangle(
                 a: idx(last, 0),
