@@ -86,8 +86,9 @@ struct Climb3DMesh {
         )
 
         let material = SCNMaterial()
-        material.diffuse.contents = UIColor.systemGray2
-        material.roughness.contents = 0.82
+        // Warm road/terrain tone closer to the rider-view reference.
+        material.diffuse.contents = UIColor.systemOrange
+        material.roughness.contents = 0.90
         material.metalness.contents = 0.0
         material.lightingModel = .physicallyBased
         material.isDoubleSided = true
