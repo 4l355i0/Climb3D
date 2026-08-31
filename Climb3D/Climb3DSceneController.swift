@@ -108,7 +108,7 @@ final class Climb3DSceneController {
             mesh.sceneGeometry()
 
         roadNode.geometry =
-            mesh.roadGeometry()
+            mesh.sceneGeometry()
 
         rebuildRoute(
             mesh.centerline
