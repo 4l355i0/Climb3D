@@ -120,7 +120,7 @@ struct Climb3DMesh {
         elements.reserveCapacity(sortedBuckets.count)
         materials.reserveCapacity(sortedBuckets.count)
 
-        for (materialIndex, bucket) in sortedBuckets.enumerated() {
+        for bucket in sortedBuckets {
 
             guard let indices = bucketIndices[bucket],
                   !indices.isEmpty else {
@@ -140,7 +140,6 @@ struct Climb3DMesh {
                     bytesPerIndex: MemoryLayout<Int32>.size
                 )
 
-            element.materialIndex = materialIndex
             elements.append(element)
             materials.append(material(forBucket: bucket))
         }
