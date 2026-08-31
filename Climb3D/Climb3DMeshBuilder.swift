@@ -3,36 +3,30 @@ import Foundation
 struct Climb3DMeshBuilder {
 
     /*
-     VISUAL MODEL
+     VISUAL MODEL ONLY
 
-     RideClimb physics are completely separate.
+     RideClimb physics remain authoritative.
     */
 
-    let roadHalfWidthM: Double = 4.0
+    let roadHalfWidthM: Double = 5.0
 
-    // Wider visual terrain corridor
-    let terrainHalfWidthM: Double = 42.0
+    // Local block thickness under the road.
+    let roadThicknessM: Double = 10.0
 
-    // Makes the terrain mass clearly visible
-    let terrainThicknessM: Double = 22.0
-
-    // Deliberately exaggerated for visual perception
+    // Deliberately exaggerated for visual perception.
     let verticalExaggeration: Double = 2.2
 
-    let roadLiftM: Double = 1.0
-    let centerlineLiftM: Double = 1.8
+    let roadLiftM: Double = 0.8
+    let centerlineLiftM: Double = 1.5
 
     func build(
         from route: Climb3DRoute
     ) throws -> Climb3DMesh {
 
         guard route.points.count >= 2 else {
-
             throw NSError(
-                domain:
-                    "Climb3D.Mesh",
-                code:
-                    1,
+                domain: "Climb3D.Mesh",
+                code: 1,
                 userInfo: [
                     NSLocalizedDescriptionKey:
                         "Route too short"
@@ -40,11 +34,9 @@ struct Climb3DMeshBuilder {
             )
         }
 
-        let first =
-            route.points[0]
+        let first = route.points[0]
 
-        let latScale =
-            111_320.0
+        let latScale = 111_320.0
 
         let lonScale =
             111_320.0 *
@@ -97,21 +89,29 @@ struct Climb3DMeshBuilder {
                 )
             }
 
-        var terrainVertices:
-            [Climb3DVertex] = []
+        /*
+         Four vertices per route point:
 
-        var roadVertices:
+         top-left
+         top-right
+         bottom-left
+         bottom-right
+
+         The bottom follows the local elevation:
+         topY - roadThicknessM.
+
+         This gives volume without building huge
+         terrain sheets around the route.
+        */
+
+        var vertices:
             [Climb3DVertex] = []
 
         var centerline:
             [Climb3DVertex] = []
 
-        terrainVertices.reserveCapacity(
+        vertices.reserveCapacity(
             points.count * 4
-        )
-
-        roadVertices.reserveCapacity(
-            points.count * 2
         )
 
         centerline.reserveCapacity(
@@ -155,6 +155,25 @@ struct Climb3DMeshBuilder {
 
             if length < 0.001 {
 
+                if index > 0 {
+
+                    dx =
+                        point.x -
+                        previous.x
+
+                    dz =
+                        point.z -
+                        previous.z
+
+                    length =
+                        sqrt(
+                            dx * dx +
+                            dz * dz
+                        )
+                }
+            }
+
+            if length < 0.001 {
                 dx = 1
                 dz = 0
                 length = 1
@@ -168,183 +187,86 @@ struct Climb3DMeshBuilder {
                 dx /
                 length
 
-            // MARK: Terrain
-
-            let terrainLeftX =
+            let leftX =
                 point.x +
                 nx *
-                terrainHalfWidthM
+                roadHalfWidthM
 
-            let terrainLeftZ =
+            let leftZ =
                 point.z +
                 nz *
-                terrainHalfWidthM
+                roadHalfWidthM
 
-            let terrainRightX =
+            let rightX =
                 point.x -
                 nx *
-                terrainHalfWidthM
+                roadHalfWidthM
 
-            let terrainRightZ =
+            let rightZ =
                 point.z -
                 nz *
-                terrainHalfWidthM
+                roadHalfWidthM
 
             let topY =
-                point.y
-
-            /*
-             Local thickness follows the road.
-             No global "wall to zero".
-            */
+                point.y +
+                roadLiftM
 
             let bottomY =
-                point.y -
-                terrainThicknessM
+                topY -
+                roadThicknessM
 
-            terrainVertices.append(
+            // Top left
+            vertices.append(
                 Climb3DVertex(
-                    x:
-                        Float(
-                            terrainLeftX
-                        ),
-                    y:
-                        Float(topY),
-                    z:
-                        Float(
-                            terrainLeftZ
-                        )
+                    x: Float(leftX),
+                    y: Float(topY),
+                    z: Float(leftZ)
                 )
             )
 
-            terrainVertices.append(
+            // Top right
+            vertices.append(
                 Climb3DVertex(
-                    x:
-                        Float(
-                            terrainRightX
-                        ),
-                    y:
-                        Float(topY),
-                    z:
-                        Float(
-                            terrainRightZ
-                        )
+                    x: Float(rightX),
+                    y: Float(topY),
+                    z: Float(rightZ)
                 )
             )
 
-            terrainVertices.append(
+            // Bottom left
+            vertices.append(
                 Climb3DVertex(
-                    x:
-                        Float(
-                            terrainLeftX
-                        ),
-                    y:
-                        Float(bottomY),
-                    z:
-                        Float(
-                            terrainLeftZ
-                        )
+                    x: Float(leftX),
+                    y: Float(bottomY),
+                    z: Float(leftZ)
                 )
             )
 
-            terrainVertices.append(
+            // Bottom right
+            vertices.append(
                 Climb3DVertex(
-                    x:
-                        Float(
-                            terrainRightX
-                        ),
-                    y:
-                        Float(bottomY),
-                    z:
-                        Float(
-                            terrainRightZ
-                        )
-                )
-            )
-
-            // MARK: Road
-
-            let roadLeftX =
-                point.x +
-                nx *
-                roadHalfWidthM
-
-            let roadLeftZ =
-                point.z +
-                nz *
-                roadHalfWidthM
-
-            let roadRightX =
-                point.x -
-                nx *
-                roadHalfWidthM
-
-            let roadRightZ =
-                point.z -
-                nz *
-                roadHalfWidthM
-
-            roadVertices.append(
-                Climb3DVertex(
-                    x:
-                        Float(
-                            roadLeftX
-                        ),
-                    y:
-                        Float(
-                            point.y +
-                            roadLiftM
-                        ),
-                    z:
-                        Float(
-                            roadLeftZ
-                        )
-                )
-            )
-
-            roadVertices.append(
-                Climb3DVertex(
-                    x:
-                        Float(
-                            roadRightX
-                        ),
-                    y:
-                        Float(
-                            point.y +
-                            roadLiftM
-                        ),
-                    z:
-                        Float(
-                            roadRightZ
-                        )
+                    x: Float(rightX),
+                    y: Float(bottomY),
+                    z: Float(rightZ)
                 )
             )
 
             centerline.append(
                 Climb3DVertex(
-                    x:
-                        Float(
-                            point.x
-                        ),
-                    y:
-                        Float(
-                            point.y +
-                            centerlineLiftM
-                        ),
-                    z:
-                        Float(
-                            point.z
-                        )
+                    x: Float(point.x),
+                    y: Float(
+                        point.y +
+                        centerlineLiftM
+                    ),
+                    z: Float(point.z)
                 )
             )
         }
 
-        // MARK: Terrain triangles
-
-        var terrainTriangles:
+        var triangles:
             [Climb3DTriangle] = []
 
-        func terrainIndex(
+        func idx(
             _ point: Int,
             _ offset: Int
         ) -> Int32 {
@@ -358,210 +280,89 @@ struct Climb3DMeshBuilder {
         for index in
             0..<(points.count - 1) {
 
-            // Top
-            terrainTriangles.append(
+            // TOP
+            triangles.append(
                 Climb3DTriangle(
-                    a:
-                        terrainIndex(
-                            index,
-                            0
-                        ),
-                    b:
-                        terrainIndex(
-                            index,
-                            1
-                        ),
-                    c:
-                        terrainIndex(
-                            index + 1,
-                            0
-                        )
+                    a: idx(index, 0),
+                    b: idx(index, 1),
+                    c: idx(index + 1, 0)
                 )
             )
 
-            terrainTriangles.append(
+            triangles.append(
                 Climb3DTriangle(
-                    a:
-                        terrainIndex(
-                            index,
-                            1
-                        ),
-                    b:
-                        terrainIndex(
-                            index + 1,
-                            1
-                        ),
-                    c:
-                        terrainIndex(
-                            index + 1,
-                            0
-                        )
+                    a: idx(index, 1),
+                    b: idx(index + 1, 1),
+                    c: idx(index + 1, 0)
                 )
             )
 
-            // Left side
-            terrainTriangles.append(
+            // LEFT SIDE
+            triangles.append(
                 Climb3DTriangle(
-                    a:
-                        terrainIndex(
-                            index,
-                            2
-                        ),
-                    b:
-                        terrainIndex(
-                            index,
-                            0
-                        ),
-                    c:
-                        terrainIndex(
-                            index + 1,
-                            2
-                        )
+                    a: idx(index, 2),
+                    b: idx(index, 0),
+                    c: idx(index + 1, 2)
                 )
             )
 
-            terrainTriangles.append(
+            triangles.append(
                 Climb3DTriangle(
-                    a:
-                        terrainIndex(
-                            index,
-                            0
-                        ),
-                    b:
-                        terrainIndex(
-                            index + 1,
-                            0
-                        ),
-                    c:
-                        terrainIndex(
-                            index + 1,
-                            2
-                        )
+                    a: idx(index, 0),
+                    b: idx(index + 1, 0),
+                    c: idx(index + 1, 2)
                 )
             )
 
-            // Right side
-            terrainTriangles.append(
+            // RIGHT SIDE
+            triangles.append(
                 Climb3DTriangle(
-                    a:
-                        terrainIndex(
-                            index,
-                            1
-                        ),
-                    b:
-                        terrainIndex(
-                            index,
-                            3
-                        ),
-                    c:
-                        terrainIndex(
-                            index + 1,
-                            1
-                        )
+                    a: idx(index, 1),
+                    b: idx(index, 3),
+                    c: idx(index + 1, 1)
                 )
             )
 
-            terrainTriangles.append(
+            triangles.append(
                 Climb3DTriangle(
-                    a:
-                        terrainIndex(
-                            index,
-                            3
-                        ),
-                    b:
-                        terrainIndex(
-                            index + 1,
-                            3
-                        ),
-                    c:
-                        terrainIndex(
-                            index + 1,
-                            1
-                        )
+                    a: idx(index, 3),
+                    b: idx(index + 1, 3),
+                    c: idx(index + 1, 1)
                 )
             )
 
-            // Bottom
-            terrainTriangles.append(
+            // BOTTOM
+            triangles.append(
                 Climb3DTriangle(
-                    a:
-                        terrainIndex(
-                            index,
-                            2
-                        ),
-                    b:
-                        terrainIndex(
-                            index + 1,
-                            2
-                        ),
-                    c:
-                        terrainIndex(
-                            index,
-                            3
-                        )
+                    a: idx(index, 2),
+                    b: idx(index + 1, 2),
+                    c: idx(index, 3)
                 )
             )
 
-            terrainTriangles.append(
+            triangles.append(
                 Climb3DTriangle(
-                    a:
-                        terrainIndex(
-                            index,
-                            3
-                        ),
-                    b:
-                        terrainIndex(
-                            index + 1,
-                            2
-                        ),
-                    c:
-                        terrainIndex(
-                            index + 1,
-                            3
-                        )
+                    a: idx(index, 3),
+                    b: idx(index + 1, 2),
+                    c: idx(index + 1, 3)
                 )
             )
         }
 
         // Front cap
-
-        terrainTriangles.append(
+        triangles.append(
             Climb3DTriangle(
-                a:
-                    terrainIndex(
-                        0,
-                        2
-                    ),
-                b:
-                    terrainIndex(
-                        0,
-                        1
-                    ),
-                c:
-                    terrainIndex(
-                        0,
-                        0
-                    )
+                a: idx(0, 2),
+                b: idx(0, 1),
+                c: idx(0, 0)
             )
         )
 
-        terrainTriangles.append(
+        triangles.append(
             Climb3DTriangle(
-                a:
-                    terrainIndex(
-                        0,
-                        2
-                    ),
-                b:
-                    terrainIndex(
-                        0,
-                        3
-                    ),
-                c:
-                    terrainIndex(
-                        0,
-                        1
-                    )
+                a: idx(0, 2),
+                b: idx(0, 3),
+                c: idx(0, 1)
             )
         )
 
@@ -569,123 +370,26 @@ struct Climb3DMeshBuilder {
             points.count - 1
 
         // Rear cap
-
-        terrainTriangles.append(
+        triangles.append(
             Climb3DTriangle(
-                a:
-                    terrainIndex(
-                        last,
-                        0
-                    ),
-                b:
-                    terrainIndex(
-                        last,
-                        1
-                    ),
-                c:
-                    terrainIndex(
-                        last,
-                        2
-                    )
+                a: idx(last, 0),
+                b: idx(last, 1),
+                c: idx(last, 2)
             )
         )
 
-        terrainTriangles.append(
+        triangles.append(
             Climb3DTriangle(
-                a:
-                    terrainIndex(
-                        last,
-                        1
-                    ),
-                b:
-                    terrainIndex(
-                        last,
-                        3
-                    ),
-                c:
-                    terrainIndex(
-                        last,
-                        2
-                    )
+                a: idx(last, 1),
+                b: idx(last, 3),
+                c: idx(last, 2)
             )
         )
-
-        // MARK: Road triangles
-
-        var roadTriangles:
-            [Climb3DTriangle] = []
-
-        func roadLeft(
-            _ point: Int
-        ) -> Int32 {
-
-            Int32(
-                point * 2
-            )
-        }
-
-        func roadRight(
-            _ point: Int
-        ) -> Int32 {
-
-            Int32(
-                point * 2 + 1
-            )
-        }
-
-        for index in
-            0..<(points.count - 1) {
-
-            roadTriangles.append(
-                Climb3DTriangle(
-                    a:
-                        roadLeft(
-                            index
-                        ),
-                    b:
-                        roadRight(
-                            index
-                        ),
-                    c:
-                        roadLeft(
-                            index + 1
-                        )
-                )
-            )
-
-            roadTriangles.append(
-                Climb3DTriangle(
-                    a:
-                        roadRight(
-                            index
-                        ),
-                    b:
-                        roadRight(
-                            index + 1
-                        ),
-                    c:
-                        roadLeft(
-                            index + 1
-                        )
-                )
-            )
-        }
 
         return Climb3DMesh(
-            vertices:
-                terrainVertices,
-
-            triangles:
-                terrainTriangles,
-
-            centerline:
-                centerline,
-
-            roadVertices:
-                roadVertices,
-
-            roadTriangles:
-                roadTriangles
+            vertices: vertices,
+            triangles: triangles,
+            centerline: centerline
         )
     }
 }
