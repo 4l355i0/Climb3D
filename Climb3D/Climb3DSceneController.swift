@@ -126,10 +126,10 @@ final class Climb3DSceneController {
             8
 
         keyLightNode.eulerAngles =
-            SCNVector3(
-                -.pi / 3,
-                .pi / 4,
-                0
+    SCNVector3(
+        -Float.pi / 3,
+        Float.pi / 4,
+        0
             )
 
         scene.rootNode.addChildNode(
