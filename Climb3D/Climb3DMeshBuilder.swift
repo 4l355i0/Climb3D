@@ -570,4 +570,4 @@ struct Climb3DMeshBuilder {
 
         return sqrt(dx * dx + dz * dz)
     }
-
+}
