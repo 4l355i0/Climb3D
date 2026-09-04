@@ -168,17 +168,31 @@ struct ContentView: View {
                     .disabled(!model.hasMesh)
                 }
 
-                Button {
-                    model.resetCamera()
-                } label: {
-                    Label(
-                        "Reset 3D view",
-                        systemImage: "view.3d"
-                    )
-                    .frame(maxWidth: .infinity)
+                HStack(spacing: 10) {
+                    Button {
+                        model.showOverview()
+                    } label: {
+                        Label(
+                            "Overview",
+                            systemImage: "view.3d"
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!model.hasMesh)
+
+                    Button {
+                        model.resetCamera()
+                    } label: {
+                        Label(
+                            "Follow",
+                            systemImage: "location.fill"
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!model.hasMesh)
                 }
-                .buttonStyle(.bordered)
-                .disabled(!model.hasMesh)
             }
             .padding(12)
             .navigationTitle("Climb3D")
@@ -269,5 +283,3 @@ struct ShareSheet:
     ) {
     }
 }
-
-         
