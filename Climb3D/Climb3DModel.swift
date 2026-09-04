@@ -17,6 +17,7 @@ final class Climb3DModel: ObservableObject {
 
     private(set) var route: Climb3DRoute?
     private var mesh: Climb3DMesh?
+    private var stlMesh: Climb3DMesh?
 
     var currentDistanceM: Double {
         guard let route else { return 0 }
@@ -49,10 +50,11 @@ final class Climb3DModel: ObservableObject {
 
         let result = try GPXtruderEngine().build(url: url)
         let parsed = result.route
-        let generated = result.mesh
+        let generated = result.sceneMesh
 
         route = parsed
         mesh = generated
+        stlMesh = result.stlMesh
         geometryChecks = String(
             format: "Auto %dm • %d stations • %.1f×%.1f×%.1f mm • %@",
             result.diagnostics.smoothingDistanceM,
@@ -74,13 +76,13 @@ final class Climb3DModel: ObservableObject {
         progress = 0
 
         status = String(
-            format: "GPXtruder geometry • %.1f km",
+            format: "GPXtruder exact JS • %.1f km",
             parsed.totalDistanceM / 1000
         )
     }
 
     func exportSTL() throws -> URL {
-        guard let mesh else {
+        guard let mesh = stlMesh else {
             throw NSError(
                 domain: "Climb3D",
                 code: 1,
@@ -101,4 +103,3 @@ final class Climb3DModel: ObservableObject {
         sceneController.resetCamera()
     }
 }
-
