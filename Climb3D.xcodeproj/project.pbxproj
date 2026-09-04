@@ -145,7 +145,7 @@
                 DEVELOPMENT_TEAM = K2FS6TGPBV;
                 GENERATE_INFOPLIST_FILE = NO;
                 INFOPLIST_FILE = Climb3D/Info.plist;
-                IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+                IPHONEOS_DEPLOYMENT_TARGET = 18.0;
                 MARKETING_VERSION = 0.1;
                 PRODUCT_BUNDLE_IDENTIFIER = com.alessiosargentini.climb3d;
                 PRODUCT_NAME = Climb3D;
@@ -165,7 +165,7 @@
                 DEVELOPMENT_TEAM = K2FS6TGPBV;
                 GENERATE_INFOPLIST_FILE = NO;
                 INFOPLIST_FILE = Climb3D/Info.plist;
-                IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+                IPHONEOS_DEPLOYMENT_TARGET = 18.0;
                 MARKETING_VERSION = 0.1;
                 PRODUCT_BUNDLE_IDENTIFIER = com.alessiosargentini.climb3d;
                 PRODUCT_NAME = Climb3D;
