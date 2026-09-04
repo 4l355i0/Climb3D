@@ -142,21 +142,28 @@ struct Climb3DView: UIViewRepresentable {
 
                 Task { @MainActor in
                     sceneController
-                        .disableFollowMode()
+                        .showOverview()
                 }
 
             case .changed:
 
-                /*
-                 Manual camera interaction is currently
-                 disabled once Follow is released.
+                let dx =
+                    translation.x -
+                    lastPanTranslation.x
 
-                 We leave the camera where it is instead
-                 of fighting with the automatic controller.
-                */
+                let dy =
+                    translation.y -
+                    lastPanTranslation.y
 
                 lastPanTranslation =
                     translation
+
+                Task { @MainActor in
+                    sceneController.rotateOverview(
+                        deltaX: dx,
+                        deltaY: dy
+                    )
+                }
 
             case .ended,
                  .cancelled,
@@ -187,19 +194,23 @@ struct Climb3DView: UIViewRepresentable {
 
                 Task { @MainActor in
                     sceneController
-                        .disableFollowMode()
+                        .showOverview()
                 }
 
             case .changed:
 
-                /*
-                 Follow mode is paused.
-                 We don't alter the follow camera here.
-                 Manual zoom can be added separately later.
-                */
+                let incrementalScale =
+                    gesture.scale /
+                    max(lastPinchScale, 0.001)
 
                 lastPinchScale =
                     gesture.scale
+
+                Task { @MainActor in
+                    sceneController.zoomOverview(
+                        scale: incrementalScale
+                    )
+                }
 
             case .ended,
                  .cancelled,
