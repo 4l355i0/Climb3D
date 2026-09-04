@@ -17,6 +17,7 @@
         B9 = {isa = PBXBuildFile; fileRef = F9; };
         BF1 = {isa = PBXBuildFile; fileRef = FF1; };
         BA1 = {isa = PBXBuildFile; fileRef = FA1; };
+        B12 = {isa = PBXBuildFile; fileRef = F12; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -31,6 +32,7 @@
         F9 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STLWriter.swift; sourceTree = "<group>"; };
         F10 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareSheet.swift; sourceTree = "<group>"; };
         F11 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+        F12 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPXtruderEngine.swift; sourceTree = "<group>"; };
         FA1 = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
         PRODUCT = {isa = PBXFileReference; explicitFileType = wrapper.application; path = Climb3D.app; sourceTree = BUILT_PRODUCTS_DIR; };
         FF1 = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SceneKit.framework; path = System/Library/Frameworks/SceneKit.framework; sourceTree = SDKROOT; };
@@ -55,7 +57,7 @@
             isa = PBXGroup;
             path = Climb3D;
             sourceTree = "<group>";
-            children = (F1,F2,F3,F4,F5,F6,F7,F8,F9,F10,F11,FA1,);
+            children = (F1,F2,F3,F4,F5,F6,F7,F8,F9,F10,F11,F12,FA1,);
         };
         FRAMEWORKGROUP = {
             isa = PBXGroup;
@@ -118,7 +120,7 @@
         SOURCES = {
             isa = PBXSourcesBuildPhase;
             buildActionMask = 2147483647;
-            files = (B1,B2,B3,B4,B5,B6,B7,B8,B9,);
+            files = (B1,B2,B3,B4,B5,B6,B7,B8,B9,B12,);
             runOnlyForDeploymentPostprocessing = 0;
         };
 /* End PBXSourcesBuildPhase section */
