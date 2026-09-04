@@ -99,6 +99,10 @@ final class Climb3DModel: ObservableObject {
         )
     }
 
+    func showOverview() {
+        sceneController.showOverview()
+    }
+
     func resetCamera() {
         sceneController.resetCamera()
     }
