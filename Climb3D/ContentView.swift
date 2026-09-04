@@ -36,6 +36,14 @@ struct ContentView: View {
                     }
                 }
 
+                if model.hasMesh && !model.geometryChecks.isEmpty {
+                    Text(model.geometryChecks)
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .lineLimit(2)
+                }
+
                 Climb3DView(
                     sceneController: model.sceneController,
                     progress: model.progress
@@ -261,3 +269,5 @@ struct ShareSheet:
     ) {
     }
 }
+
+         
