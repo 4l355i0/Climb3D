@@ -94,7 +94,7 @@ struct GPXtruderEngine {
         let finite = stlMesh.vertices.allSatisfy { $0.x.isFinite && $0.y.isFinite && $0.z.isFinite }
         let topologyOK = js.faces.count == js.stations.count * 8 - 4
         let countOK = js.vertices.count == js.stations.count * 4
-        let routeOK = built.route.points.count == js.stations.count && built.route.totalDistanceM > 0
+        let routeOK = built.route.points.count == built.mesh.centerline.count && built.route.points.count > 1 && built.route.totalDistanceM > 0
         let centerlineOK = js.centerline.count == js.stations.count
         let checksPassed = finite && topologyOK && countOK && routeOK && centerlineOK
         let checkMessage = [
@@ -411,4 +411,3 @@ struct GPXtruderEngine {
         NSError(domain: "Climb3D.GPXtruder", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
     }
 }
-
