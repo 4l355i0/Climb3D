@@ -11,6 +11,7 @@ final class Climb3DModel: ObservableObject {
     @Published var status = "Load a GPX to create the 3D climb"
     @Published private(set) var hasGPX = false
     @Published private(set) var hasMesh = false
+    @Published private(set) var geometryChecks = ""
 
     let sceneController = Climb3DSceneController()
 
@@ -46,11 +47,21 @@ final class Climb3DModel: ObservableObject {
             }
         }
 
-        let parsed = try Climb3DGPXParser().parse(url: url)
-        let generated = try Climb3DMeshBuilder().build(from: parsed)
+        let result = try GPXtruderEngine().build(url: url)
+        let parsed = result.route
+        let generated = result.mesh
 
         route = parsed
         mesh = generated
+        geometryChecks = String(
+            format: "Auto %dm • %d stations • %.1f×%.1f×%.1f mm • %@",
+            result.diagnostics.smoothingDistanceM,
+            result.diagnostics.centerlineStations,
+            result.diagnostics.modelWidthMM,
+            result.diagnostics.modelDepthMM,
+            result.diagnostics.modelHeightMM,
+            result.diagnostics.checksPassed ? "CHECKS OK" : "CHECK FAILED"
+        )
 
         sceneController.setMesh(
             generated,
@@ -63,7 +74,7 @@ final class Climb3DModel: ObservableObject {
         progress = 0
 
         status = String(
-            format: "PASS-THROUGH GPX • %.1f km",
+            format: "GPXtruder geometry • %.1f km",
             parsed.totalDistanceM / 1000
         )
     }
@@ -90,3 +101,4 @@ final class Climb3DModel: ObservableObject {
         sceneController.resetCamera()
     }
 }
+
