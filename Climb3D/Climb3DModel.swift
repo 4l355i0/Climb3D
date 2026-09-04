@@ -63,7 +63,7 @@ final class Climb3DModel: ObservableObject {
         progress = 0
 
         status = String(
-            format: "3D climb created • %.1f km",
+            format: "PASS-THROUGH GPX • %.1f km",
             parsed.totalDistanceM / 1000
         )
     }
