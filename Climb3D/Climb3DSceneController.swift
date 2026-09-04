@@ -25,6 +25,16 @@ final class Climb3DSceneController {
     private var currentProgress: Double = 0
     private var followMode = true
 
+    // Manual overview/orbit camera. This is deliberately separate from the
+    // validated rider-follow camera so the original follow behaviour is left
+    // unchanged.
+    private var overviewTarget = SCNVector3Zero
+    private var overviewDistance: Float = 100
+    private var overviewYaw: Float = 0
+    private var overviewPitch: Float = -0.72
+    private var overviewMinimumDistance: Float = 5
+    private var overviewMaximumDistance: Float = 10_000
+
     // Build 14 rider view. Position is taken from the actual route behind
     // the rider, so the camera follows a hairpin rather than cutting across it.
     private let cameraBehindM: Double = 12
@@ -356,6 +366,121 @@ final class Climb3DSceneController {
             progress: currentProgress,
             animated: true
         )
+    }
+
+    func showOverview() {
+        guard let mesh,
+              !mesh.centerline.isEmpty else {
+            return
+        }
+
+        followMode = false
+
+        var minX = mesh.centerline[0].x
+        var maxX = mesh.centerline[0].x
+        var minY = mesh.centerline[0].y
+        var maxY = mesh.centerline[0].y
+        var minZ = mesh.centerline[0].z
+        var maxZ = mesh.centerline[0].z
+
+        for p in mesh.centerline.dropFirst() {
+            minX = min(minX, p.x)
+            maxX = max(maxX, p.x)
+            minY = min(minY, p.y)
+            maxY = max(maxY, p.y)
+            minZ = min(minZ, p.z)
+            maxZ = max(maxZ, p.z)
+        }
+
+        overviewTarget = SCNVector3(
+            (minX + maxX) * 0.5,
+            (minY + maxY) * 0.5,
+            (minZ + maxZ) * 0.5
+        )
+
+        let spanX = maxX - minX
+        let spanY = maxY - minY
+        let spanZ = maxZ - minZ
+        let horizontalSpan = max(spanX, spanZ)
+        let dominantSpan = max(horizontalSpan, spanY)
+
+        // Enough distance to frame the whole climb with the existing 66° FOV.
+        overviewDistance = max(20, dominantSpan * 1.25)
+        overviewMinimumDistance = max(3, dominantSpan * 0.08)
+        overviewMaximumDistance = max(200, dominantSpan * 8.0)
+
+        overviewYaw = -0.72
+        overviewPitch = -0.72
+
+        updateOverviewCamera(animated: true)
+    }
+
+    func rotateOverview(
+        deltaX: CGFloat,
+        deltaY: CGFloat
+    ) {
+        guard !followMode else { return }
+
+        overviewYaw -= Float(deltaX) * 0.008
+        overviewPitch -= Float(deltaY) * 0.006
+
+        // Avoid flipping over the poles.
+        overviewPitch = min(1.30, max(-1.30, overviewPitch))
+
+        updateOverviewCamera(animated: false)
+    }
+
+    func zoomOverview(scale: CGFloat) {
+        guard !followMode,
+              scale.isFinite,
+              scale > 0 else {
+            return
+        }
+
+        overviewDistance /= Float(scale)
+        overviewDistance = min(
+            overviewMaximumDistance,
+            max(overviewMinimumDistance, overviewDistance)
+        )
+
+        updateOverviewCamera(animated: false)
+    }
+
+    private func updateOverviewCamera(animated: Bool) {
+        let cosPitch = cos(overviewPitch)
+
+        let offset = SCNVector3(
+            overviewDistance * cosPitch * sin(overviewYaw),
+            overviewDistance * sin(-overviewPitch),
+            overviewDistance * cosPitch * cos(overviewYaw)
+        )
+
+        let position = SCNVector3(
+            overviewTarget.x + offset.x,
+            overviewTarget.y + offset.y,
+            overviewTarget.z + offset.z
+        )
+
+        let apply = {
+            self.cameraNode.position = position
+            self.cameraNode.look(
+                at: self.overviewTarget,
+                up: SCNVector3(0, 1, 0),
+                localFront: SCNVector3(0, 0, -1)
+            )
+            self.view?.pointOfView = self.cameraNode
+        }
+
+        if animated {
+            SCNTransaction.begin()
+            SCNTransaction.animationDuration = 0.28
+            SCNTransaction.animationTimingFunction =
+                CAMediaTimingFunction(name: .easeInEaseOut)
+            apply()
+            SCNTransaction.commit()
+        } else {
+            apply()
+        }
     }
 
     func resetCamera() {
