@@ -71,10 +71,10 @@ struct Climb3DMeshBuilder {
                 )
             }
 
-        // Keep the Build 13/14 path preparation: remove only pathological
-        // near-duplicates/reversals, without XY smoothing that cuts hairpins.
-        let meshPoints =
-            prepareMeshPath(allPoints)
+        // PASS-THROUGH VALIDATION BUILD:
+        // use every imported GPX point exactly as supplied.
+        // No point removal, no reversal cleanup, no XY preprocessing.
+        let meshPoints = allPoints
 
         guard meshPoints.count >= 2 else {
             throw NSError(
