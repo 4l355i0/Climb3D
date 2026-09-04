@@ -248,7 +248,137 @@ struct GPXtruderEngine {
         let scale = js.scale
         let elevationOffset = js.offset[2]
 
-        func sceneVertex(_ v: [Double]) throws -> Climb3DVertex {
+        // IMPORTANT: GPXtruder itself remains untouched. From here on we only
+        // derive a rideable/renderable centreline from its exact output.
+        struct Sample {
+            var x: Double
+            var y: Double
+            var z: Double
+            var lat: Double
+            var lon: Double
+        }
+
+        guard js.centerline.count == js.stations.count else {
+            throw error("GPXtruder centerline/station mismatch")
+        }
+
+        // 1) Exact GPXtruder medial line, mapped back to real metres.
+        var source: [Sample] = []
+        source.reserveCapacity(js.stations.count)
+        for i in js.stations.indices {
+            let c = js.centerline[i]
+            let st = js.stations[i]
+            guard c.count >= 3, st.raw.count >= 3 else { throw error("Invalid GPXtruder centreline") }
+            source.append(Sample(
+                x: c[0] / scale,
+                y: (c[2] - baseHeightMM) / (scale * verticalExaggeration),
+                z: -c[1] / scale,
+                lat: st.raw[1],
+                lon: st.raw[0]
+            ))
+        }
+
+        // 2) Densify the GPXtruder centreline every 5 m. This is linear along
+        // the exact centreline: it adds resolution but does not invent XY bends.
+        let spacingM = 5.0
+        var sourceD = Array(repeating: 0.0, count: source.count)
+        for i in 1..<source.count {
+            sourceD[i] = sourceD[i - 1] + hypot(source[i].x - source[i - 1].x, source[i].z - source[i - 1].z)
+        }
+        let total = sourceD.last ?? 0
+        guard total > 0 else { throw error("Zero-length GPXtruder centreline") }
+
+        var dense: [Sample] = []
+        var target = 0.0
+        var seg = 1
+        while target < total {
+            while seg < sourceD.count - 1 && sourceD[seg] < target { seg += 1 }
+            let d0 = sourceD[seg - 1], d1 = sourceD[seg]
+            let t = d1 > d0 ? (target - d0) / (d1 - d0) : 0
+            let a = source[seg - 1], b = source[seg]
+            dense.append(Sample(
+                x: a.x + (b.x - a.x) * t,
+                y: a.y + (b.y - a.y) * t,
+                z: a.z + (b.z - a.z) * t,
+                lat: a.lat + (b.lat - a.lat) * t,
+                lon: a.lon + (b.lon - a.lon) * t
+            ))
+            target += spacingM
+        }
+        if let last = source.last { dense.append(last) }
+
+        // 3) Smooth ONLY elevation versus travelled distance. A symmetric
+        // 50 m triangular window removes station-to-station grade steps while
+        // leaving the plan-view geometry and hairpins exactly where GPXtruder put them.
+        let rawY = dense.map(\.y)
+        let radius = 5 // 5 samples each side = 25 m; full window ~50 m.
+        var smoothY = rawY
+        if dense.count > 2 {
+            for i in dense.indices {
+                var weighted = 0.0, weights = 0.0
+                let lo = max(0, i - radius), hi = min(dense.count - 1, i + radius)
+                for j in lo...hi {
+                    let w = Double(radius + 1 - abs(j - i))
+                    weighted += rawY[j] * w
+                    weights += w
+                }
+                smoothY[i] = weighted / weights
+            }
+            // Preserve exact start/end elevation and distribute the tiny endpoint
+            // correction continuously so total climbing height is unchanged.
+            let startDelta = rawY[0] - smoothY[0]
+            let endDelta = rawY[rawY.count - 1] - smoothY[smoothY.count - 1]
+            let denom = Double(max(1, smoothY.count - 1))
+            for i in smoothY.indices {
+                let t = Double(i) / denom
+                smoothY[i] += startDelta * (1 - t) + endDelta * t
+                dense[i].y = smoothY[i]
+            }
+        }
+
+        // 4) Build a narrow app road around the cleaned centreline. We do NOT
+        // render GPXtruder's 2 mm STL miter ribbon because, when scaled back to
+        // metres, its corner miters become the triangular spikes seen in B20.
+        let roadHalfWidthM = 3.0
+        var visual: [Climb3DVertex] = []
+        var center: [Climb3DVertex] = []
+        var grades: [Double] = []
+        var routePoints: [Climb3DRoutePoint] = []
+        visual.reserveCapacity(dense.count * 2)
+        center.reserveCapacity(dense.count)
+
+        var cumulative = 0.0
+        for i in dense.indices {
+            let p = dense[i]
+            center.append(Climb3DVertex(x: Float(p.x), y: Float(p.y), z: Float(p.z)))
+
+            let prev = dense[max(0, i - 1)]
+            let next = dense[min(dense.count - 1, i + 1)]
+            var tx = next.x - prev.x, tz = next.z - prev.z
+            let tl = hypot(tx, tz)
+            if tl > 0.0001 { tx /= tl; tz /= tl } else { tx = 1; tz = 0 }
+            let nx = -tz, nz = tx
+            visual.append(Climb3DVertex(x: Float(p.x + nx * roadHalfWidthM), y: Float(p.y), z: Float(p.z + nz * roadHalfWidthM)))
+            visual.append(Climb3DVertex(x: Float(p.x - nx * roadHalfWidthM), y: Float(p.y), z: Float(p.z - nz * roadHalfWidthM)))
+
+            if i > 0 {
+                let a = dense[i - 1]
+                let run = hypot(p.x - a.x, p.z - a.z)
+                cumulative += run
+                grades.append(run > 0.001 ? (p.y - a.y) / run * 100.0 : 0)
+            }
+
+            routePoints.append(Climb3DRoutePoint(
+                latitude: p.lat,
+                longitude: p.lon,
+                elevationM: p.y + elevationOffset,
+                distanceM: cumulative
+            ))
+        }
+
+        // STL/export remains the exact GPXtruder mesh. Scene rendering uses the
+        // cleaned ride centreline and app road only.
+        let exactVertices = try js.vertices.map { v -> Climb3DVertex in
             guard v.count >= 3 else { throw error("Invalid GPXtruder vertex") }
             return Climb3DVertex(
                 x: Float(v[0] / scale),
@@ -256,50 +386,14 @@ struct GPXtruderEngine {
                 z: Float(-v[1] / scale)
             )
         }
-
-        let vertices = try js.vertices.map(sceneVertex)
-        let triangles = try js.faces.map { f -> Climb3DTriangle in
+        let exactTriangles = try js.faces.map { f -> Climb3DTriangle in
             guard f.count >= 3 else { throw error("Invalid GPXtruder face") }
             return Climb3DTriangle(a: Int32(f[0]), b: Int32(f[1]), c: Int32(f[2]))
         }
-        let center = try js.centerline.map(sceneVertex)
-
-        var visual: [Climb3DVertex] = []
-        var routePoints: [Climb3DRoutePoint] = []
-        var grades: [Double] = []
-        var cumulative = 0.0
-
-        for i in js.stations.indices {
-            let s = js.stations[i]
-            guard s.left.count >= 2, s.right.count >= 2, s.raw.count >= 3 else {
-                throw error("Invalid GPXtruder station")
-            }
-            let left = try sceneVertex([s.left[0], s.left[1], s.z])
-            let right = try sceneVertex([s.right[0], s.right[1], s.z])
-            visual.append(left); visual.append(right)
-
-            if i > 0 {
-                let a = center[i - 1], b = center[i]
-                cumulative += hypot(Double(b.x - a.x), Double(b.z - a.z))
-                let run = hypot(Double(b.x - a.x), Double(b.z - a.z))
-                let rise = Double(b.y - a.y)
-                grades.append(run > 0.001 ? rise / run * 100.0 : 0)
-            }
-
-            let absoluteElevation = (s.z - baseHeightMM) / (scale * verticalExaggeration) + elevationOffset
-            routePoints.append(
-                Climb3DRoutePoint(
-                    latitude: s.raw[1],
-                    longitude: s.raw[0],
-                    elevationM: absoluteElevation,
-                    distanceM: cumulative
-                )
-            )
-        }
 
         let mesh = Climb3DMesh(
-            vertices: vertices,
-            triangles: triangles,
+            vertices: exactVertices,
+            triangles: exactTriangles,
             centerline: center,
             visualVertices: visual,
             visualSegmentGrades: grades
@@ -317,3 +411,4 @@ struct GPXtruderEngine {
         NSError(domain: "Climb3D.GPXtruder", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
     }
 }
+
