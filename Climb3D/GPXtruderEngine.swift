@@ -315,18 +315,35 @@ struct GPXtruderEngine {
 
         for i in stations.indices {
             let s = stations[i]
-            // SceneKit axes: GPXtruder X -> X, GPXtruder Z -> Y(vertical), GPXtruder Y -> -Z.
+            // Keep the GPXtruder solid in its native STL/model units (mm).
+            // This preserves byte/geometry comparability with GPXtruder output.
             let tl = Climb3DVertex(x: Float(s.leftX), y: Float(s.z), z: Float(-s.leftY))
             let tr = Climb3DVertex(x: Float(s.rightX), y: Float(s.z), z: Float(-s.rightY))
             let bl = Climb3DVertex(x: Float(s.leftX), y: 0, z: Float(-s.leftY))
             let br = Climb3DVertex(x: Float(s.rightX), y: 0, z: Float(-s.rightY))
             vertices.append(contentsOf: [tl, tr, bl, br])
-            visual.append(contentsOf: [tl, tr])
+
+            // SceneKit/camera works in real metres, as in the original Climb3D.
+            // Undo only GPXtruder's XY model scale. For Y, remove the 1 mm
+            // model base and undo the same scale while intentionally keeping
+            // GPXtruder's x5 vertical exaggeration, matching Climb3D's existing
+            // visual convention. The route shape still comes entirely from the
+            // GPXtruder stations; only scene units change.
+            let sceneLeftX = s.leftX / scale
+            let sceneLeftZ = -s.leftY / scale
+            let sceneRightX = s.rightX / scale
+            let sceneRightZ = -s.rightY / scale
+            let sceneY = (s.z - baseHeightMM) / scale
+
+            visual.append(contentsOf: [
+                Climb3DVertex(x: Float(sceneLeftX), y: Float(sceneY), z: Float(sceneLeftZ)),
+                Climb3DVertex(x: Float(sceneRightX), y: Float(sceneY), z: Float(sceneRightZ))
+            ])
 
             let c = Climb3DVertex(
-                x: Float((s.leftX + s.rightX) / 2),
-                y: Float(s.z),
-                z: Float(-(s.leftY + s.rightY) / 2)
+                x: Float((sceneLeftX + sceneRightX) / 2),
+                y: Float(sceneY),
+                z: Float((sceneLeftZ + sceneRightZ) / 2)
             )
             center.append(c)
 
